@@ -1,4 +1,4 @@
-# AgriSense: AI-Driven Precision Soil Sustainability
+# pHorest: AI-Driven Precision Soil Sustainability
 **A CHY1009/Environmental Science Project**
 
 ## 🌿 Overview
