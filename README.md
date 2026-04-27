@@ -1,32 +1,27 @@
-# AI-Enhanced Soil Health & Sustainability Monitor (CHY1009)
+# AgriSense: AI-Driven Precision Soil Sustainability
+**A CHY1009/Environmental Science Project**
 
-## 🎯 Project Goal
-To develop a **Cyber-Physical System** that utilizes Machine Learning to predict soil health and suggest precise chemical interventions (fertilizers/neutralizers). The objective is to maintain **Acid-Base Equilibrium** and prevent environmental degradation, such as soil acidification and nutrient runoff, through precision agriculture.
+## 🌿 Overview
+AgriSense is a cyber-physical system designed to combat soil acidification and nutrient runoff—major environmental concerns in modern chemistry. By integrating IoT sensors with a Random Forest Machine Learning model, the system identifies the soil's chemical state and provides precise neutralization strategies.
 
-## 🛠️ Tech Stack & File Structure
-- **AI Model:** `soil_model.pkl` (Random Forest Classifier trained on `Crop_recommendation.csv`).
-- **Hardware:** `sensor_readings.cpp` (Arduino code for pH, TDS, and environmental sensing).
-- **Bridge:** `main_bridge.py` (Real-time Serial-to-ML inference script).
-- **Testing:** `virtual_demo.py` (Simulation script for logic verification without hardware).
+## 🧪 Chemistry & EVS Focus
+- **Acid-Base Equilibrium:** Monitoring soil pH to prevent aluminum toxicity.
+- **Ion Exchange Capacity:** Using TDS as a proxy for nutrient (NPK) concentration.
+- **Sustainability:** Reducing chemical waste by suggesting the "minimum necessary" fertilizer.
 
-## 🤖 Instructions for AI Agents (Copilot/Gemini-CLI)
-When assisting with this project, adhere to the following technical constraints:
+## 🚀 Features
+- **Hardware Sensing:** Real-time pH, TDS, and Temperature monitoring via Arduino.
+- **AI Inference:** Random Forest Classifier trained on agricultural datasets.
+- **Smart Recommendations:** Automated chemical advice (e.g., Applying $CaCO_3$ for low pH).
 
-### 1. Data Schema
-The model expects a 7-feature input vector in this **exact** order:
-`['Nitrogen', 'phosphorus', 'potassium', 'temperature', 'humidity', 'ph', 'rainfall']`
+## 📂 Project Structure
+- `main_bridge.py`: Local Python bridge between Arduino and ML model.
+- `virtual_demo.py`: Simulation script for software-only demonstration.
+- `sensor_readings.cpp`: Arduino firmware for data acquisition.
+- `soil_model.pkl`: Serialized Random Forest model.
+- `Crop_recommendation.csv`: Dataset used for training.
 
-### 2. Inference Logic
-- **Input Source:** Raw values from Arduino Serial (CSV format).
-- **Processing:** Parse string -> Create Pandas DataFrame -> `model.predict()`.
-- **Sustainability Guardrails:** - If `ph < 5.5`: Recommend **CaCO3 (Lime)**.
-    - If `ph > 7.5`: Recommend **Organic Matter/Sulfur**.
-    - Goal: Guide the user toward the "Ideal Chemical State" for the predicted crop.
-
-### 3. Hardware Interfacing
-- **Library:** `pyserial`.
-- **Baud Rate:** `9600`.
-- **Target Port:** `/dev/ttyACM0` or `/dev/ttyUSB0` (Arch Linux default).
-
-## 🧪 Chemistry Focus (CHY1009 / EVS)
-This project demonstrates **Ion Exchange Capacity** and **Buffer Systems** in soil. It replaces "Broadcasting" (wasteful chemical application) with "Precision" (sustainable application) by treating AI as a real-time chemical analyst.
+## 🛠️ Setup
+1. Connect Arduino to `/dev/ttyACM0`.
+2. Install dependencies: `pip install pandas joblib pyserial scikit-learn`.
+3. Run `python main_bridge.py`.
