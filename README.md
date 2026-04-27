@@ -23,18 +23,57 @@ AgriSense is a cyber-physical system designed to combat soil acidification and n
 - `dataset/Crop_recommendation.csv`: Dataset used for training.
 
 ## 🛠️ Setup
-1. Connect Arduino to `/dev/ttyACM0`.
-2. Install dependencies: `pip install pandas joblib pyserial scikit-learn flask`.
+
+### Linux / macOS
+1. Connect Arduino (commonly `/dev/ttyACM0` or `/dev/ttyUSB0`).
+2. Install dependencies:
+   ```bash
+   python3 -m pip install pandas joblib pyserial scikit-learn flask
+   ```
 3. Run:
-   - `python pscript.py` (hardware mode in terminal), or
-   - `python testscript.py` (simulation mode in terminal), or
-   - `python app.py` (browser dashboard in simulation mode).
+   - Hardware terminal mode:
+     ```bash
+     ARDUINO_PORT=/dev/ttyACM0 python3 pscript.py
+     ```
+   - Simulation terminal mode:
+     ```bash
+     python3 testscript.py
+     ```
+   - Browser dashboard (simulation):
+     ```bash
+     python3 app.py
+     ```
+   - Browser dashboard (live Arduino):
+     ```bash
+     SOURCE_MODE=serial ARDUINO_PORT=/dev/ttyACM0 python3 app.py
+     ```
+
+### Windows
+1. Connect Arduino and note COM port (for example `COM3`).
+2. Install dependencies:
+   ```powershell
+   py -m pip install pandas joblib pyserial scikit-learn flask
+   ```
+3. Run:
+   - Hardware terminal mode:
+     ```powershell
+     set ARDUINO_PORT=COM3
+     py pscript.py
+     ```
+   - Simulation terminal mode:
+     ```powershell
+     py testscript.py
+     ```
+   - Browser dashboard (simulation):
+     ```powershell
+     py app.py
+     ```
+   - Browser dashboard (live Arduino):
+     ```powershell
+     set SOURCE_MODE=serial
+     set ARDUINO_PORT=COM3
+     py app.py
+     ```
 
 ## 🌐 Browser Dashboard
-1. Start dashboard: `python app.py`
-2. Open: `http://127.0.0.1:5000`
-
-For Arduino live mode:
-```bash
-SOURCE_MODE=serial ARDUINO_PORT=/dev/ttyACM0 python app.py
-```
+Open `http://127.0.0.1:5000` after starting `app.py`.
