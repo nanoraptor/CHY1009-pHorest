@@ -18,6 +18,55 @@ pHorest is a cyber-physical system designed to combat soil acidification and nut
 - **AI Inference:** Random Forest Classifier trained on agricultural datasets.
 - **Smart Recommendations:** Crop prediction + fertilizer suggestion with pH-aware chemistry advice.
 
+## 🤖 ML Algorithm & Training
+
+### Model used
+
+- **Algorithm:** `RandomForestClassifier`
+- **Input features (strict order):**
+  `Nitrogen`, `phosphorus`, `potassium`, `temperature`, `humidity`, `ph`, `rainfall`
+- **Target label:** `label` (crop name)
+- **Train/test split:** `80/20` using `train_test_split(..., test_size=0.2, random_state=42)`
+- **Model params used:** `n_estimators=100`, `random_state=42`
+- **Saved model artifact:** `soil_model.pkl` (via `joblib.dump`)
+
+### Training environment
+
+- Trained in **Google Colab (Jupyter Notebook)**.
+- Dataset used: `Crop_recommendation.csv` (same schema as `dataset/Crop_recommendation.csv` in this repo).
+
+### Training code (used in Colab)
+
+```python
+import pandas as pd
+import joblib
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score
+
+df = pd.read_csv('Crop_recommendation.csv')
+
+X = df[['Nitrogen', 'phosphorus', 'potassium', 'temperature', 'humidity', 'ph', 'rainfall']]
+y = df['label']
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+model = RandomForestClassifier(n_estimators=100, random_state=42)
+model.fit(X_train, y_train)
+
+predictions = model.predict(X_test)
+print(f"Model Accuracy: {accuracy_score(y_test, predictions) * 100:.2f}%")
+
+joblib.dump(model, 'soil_model.pkl')
+print("Model saved as soil_model.pkl")
+```
+
+### Using the trained model in this project
+
+1. Place `soil_model.pkl` in the project root.
+2. Ensure runtime feature order exactly matches training feature order.
+3. Run `pscript.py`, `testscript.py`, or `app.py` to load the model and predict crops.
+
 ## 📂 Project Structure
 
 - `pscript.py`: Local Python bridge between Arduino and ML model.
