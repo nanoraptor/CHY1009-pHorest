@@ -1,0 +1,121 @@
+SESSION HANDOFF — pHorest project
+Timestamp context: 2026-04-28 session
+Repo path: /home/binaryraptor/Documents/VIT-AP/Sem 2/Chem/Project
+Git status: not a git repository
+
+GOALS REQUESTED DURING SESSION
+1) Review project, find/fix bugs.
+2) Show results clearly in browser.
+3) Add fertilizer recommendation (without retraining, if possible).
+4) Rename dashboard title to “pHorest Dashboard”.
+5) Update README for Linux/macOS + Windows.
+6) Advice-only discussion about optical/live visual element (no file changes in that step).
+
+WHAT WAS FOUND
+- README had stale/incorrect file names and run instructions.
+- pscript.py lacked robust error handling for:
+  - missing model file
+  - missing pyserial package
+  - bad serial rows / non-numeric rows
+  - graceful shutdown
+- testscript.py had broad exception on model load and no Ctrl+C handling.
+- Environment warning observed: scikit-learn model version mismatch
+  (model pickled in 1.6.1, runtime 1.8.0).
+- pyserial missing in current environment at one point (ModuleNotFoundError).
+
+FILES CHANGED
+1) pscript.py
+   - Added guarded serial import with clear install message:
+     “pip install pyserial”
+   - Added strict FileNotFoundError handling for soil_model.pkl.
+   - Added ARDUINO_PORT env support (default /dev/ttyACM0).
+   - Added serial open error handling (SerialException).
+   - Added robust loop handling:
+     - skip empty lines
+     - skip malformed rows (must be 7 CSV values)
+     - skip non-numeric rows
+   - Cast serial values to float before model input.
+   - Added balanced pH message.
+   - Added KeyboardInterrupt handling and guaranteed ser.close() in finally.
+
+2) testscript.py
+   - Replaced broad model-load except with FileNotFoundError.
+   - Added clean exit via sys.exit(1) when model missing.
+   - Wrapped infinite loop in try/except KeyboardInterrupt.
+
+3) app.py (new browser dashboard)
+   - Added Flask dashboard with:
+     - / UI
+     - /api/reading JSON endpoint
+   - Supports SOURCE_MODE=sim (default) and SOURCE_MODE=serial.
+   - Displays:
+     - pH
+     - TDS
+     - recommended crop
+     - chemical status + action
+     - raw packet + timestamp
+   - Added serial mode handling with clear runtime errors in API response.
+   - Dashboard refresh interval: 2 seconds.
+   - Later updates:
+     - renamed title/header to “pHorest Dashboard”
+     - added fertilizer recommendation UI + API fields:
+       - fertilizer
+       - fertilizer_reason
+   - Added rule-based fertilizer logic:
+     - crop map defaults (rice/maize/banana/apple/etc.)
+     - N/P/K low-threshold overrides (N<50, P<30, K<30)
+     - pH modifiers:
+       - acidic: add Agricultural Lime
+       - alkaline: add Organic Compost
+
+4) README.md
+   - Corrected project structure to real files:
+     - pscript.py, testscript.py, app.py, arduino.cpp
+     - dataset path: dataset/Crop_recommendation.csv
+   - Updated feature text to include fertilizer recommendation.
+   - Added platform-specific setup/run docs:
+     - Linux/macOS commands (python3, /dev/ttyACM0)
+     - Windows commands (py, COM3)
+   - Added browser dashboard section and live serial mode examples.
+
+DECISIONS MADE WITH USER
+- User asked if retraining is needed for fertilizer recommendation.
+- Chosen path: “Rule-based fertilizer recommendation now (Recommended)”.
+- No new fertilizer ML model was trained in this session.
+
+VALIDATION RUNS PERFORMED
+- Syntax compile checks:
+  - python -m py_compile pscript.py testscript.py
+  - python -m py_compile app.py
+- Dashboard smoke-tested via API:
+  - curl http://127.0.0.1:5000/api/reading
+  - Confirmed JSON includes fertilizer/fertilizer_reason after update.
+- Temporary /tmp output files used during smoke tests and cleaned up.
+
+RUNTIME NOTES / OPEN ITEMS
+- pyserial may need installation in target environment:
+  pip install pyserial
+- scikit-learn warning indicates pickle/runtime version mismatch:
+  model from 1.6.1, runtime seen as 1.8.0
+  (for stability, align sklearn version to training version).
+
+USER Q&A (NO FILE CHANGES FOR THIS PART)
+- Optical/visual element advice provided:
+  - camera feed (USB webcam / ESP32-CAM / phone IP cam) is useful for live browser visuals
+  - good for stress/wilting/discoloration signals
+  - not a direct replacement for pH/NPK sensors
+  - best setup: chemical sensors + camera feed + simple vision metric (e.g., leaf greenness index)
+
+CURRENT IMPORTANT RUN COMMANDS
+- Terminal hardware mode:
+  ARDUINO_PORT=/dev/ttyACM0 python3 pscript.py
+- Terminal simulation mode:
+  python3 testscript.py
+- Browser simulation mode:
+  python3 app.py
+- Browser live serial mode:
+  SOURCE_MODE=serial ARDUINO_PORT=/dev/ttyACM0 python3 app.py
+- Windows live serial mode (cmd):
+  set SOURCE_MODE=serial
+  set ARDUINO_PORT=COM3
+  py app.py

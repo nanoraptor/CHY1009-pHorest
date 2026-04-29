@@ -25,27 +25,150 @@ HTML = """
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>pHorest Dashboard</title>
   <style>
-    body { font-family: Arial, sans-serif; background:#0f172a; color:#e2e8f0; margin:0; }
-    .wrap { max-width:960px; margin:24px auto; padding:0 16px; }
-    .card { background:#1e293b; border-radius:12px; padding:16px; margin-bottom:16px; }
-    h1 { margin:0 0 8px 0; font-size:28px; }
-    .muted { color:#94a3b8; }
-    .grid { display:grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap:12px; }
-    .tile { background:#0b1220; border-radius:10px; padding:12px; }
-    .label { color:#94a3b8; font-size:12px; text-transform:uppercase; letter-spacing:0.06em; }
-    .value { font-size:24px; margin-top:8px; font-weight:700; }
-    .ok { color:#22c55e; } .warn { color:#f59e0b; } .bad { color:#ef4444; }
-    .status { font-size:20px; font-weight:700; }
-    code { background:#0b1220; padding:2px 6px; border-radius:6px; }
-    @media (max-width: 720px) { .grid { grid-template-columns:1fr; } }
+    :root {
+      --bg-a: #0b1020;
+      --bg-b: #1a2745;
+      --surface: rgba(13, 24, 45, 0.72);
+      --tile: rgba(10, 19, 36, 0.85);
+      --border: rgba(148, 163, 184, 0.22);
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --ok: #22c55e;
+      --warn: #f59e0b;
+      --bad: #ef4444;
+      --accent: #38bdf8;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Inter", "Segoe UI", Roboto, Arial, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 20% 15%, #1d4ed8 0%, rgba(29, 78, 216, 0) 38%),
+        radial-gradient(circle at 85% 10%, #0ea5e9 0%, rgba(14, 165, 233, 0) 32%),
+        linear-gradient(145deg, var(--bg-a), var(--bg-b));
+      padding: 28px 16px;
+    }
+
+    .wrap {
+      max-width: 1080px;
+      margin: 0 auto;
+      display: grid;
+      gap: 14px;
+    }
+
+    .card {
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      backdrop-filter: blur(8px);
+      box-shadow: 0 12px 34px rgba(2, 6, 23, 0.36);
+      padding: 18px;
+    }
+
+    .hero {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 14px;
+    }
+
+    h1 {
+      margin: 0 0 6px 0;
+      font-size: 30px;
+      letter-spacing: 0.01em;
+    }
+
+    .muted { color: var(--muted); }
+
+    .mode-pill {
+      align-self: center;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-size: 12px;
+      white-space: nowrap;
+      background: rgba(56, 189, 248, 0.12);
+    }
+
+    .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+
+    .tile {
+      background: linear-gradient(180deg, rgba(15, 23, 42, 0.9), var(--tile));
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      min-height: 102px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .label {
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-weight: 700;
+    }
+
+    .value {
+      margin-top: 8px;
+      font-size: 28px;
+      font-weight: 750;
+      line-height: 1.15;
+      word-break: break-word;
+    }
+
+    .status {
+      margin-top: 8px;
+      font-size: 21px;
+      font-weight: 760;
+      line-height: 1.25;
+    }
+
+    .status.ok { color: var(--ok); }
+    .status.warn { color: var(--warn); }
+    .status.bad { color: var(--bad); }
+
+    .subtext { margin-top: 8px; color: var(--muted); }
+
+    .raw-box {
+      margin-top: 8px;
+      border: 1px solid var(--border);
+      background: var(--tile);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      color: #cbd5e1;
+      font-size: 13px;
+      overflow-x: auto;
+    }
+
+    @media (max-width: 900px) {
+      .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 640px) {
+      .hero { flex-direction: column; }
+      .mode-pill { align-self: flex-start; }
+      .grid { grid-template-columns: 1fr; }
+      h1 { font-size: 26px; }
+      .value { font-size: 24px; }
+    }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <div class="card">
-      <h1>pHorest Dashboard</h1>
-      <div class="muted">Live soil chemistry + crop and fertilizer recommendation</div>
-      <div class="muted">Mode: <code id="mode">loading...</code></div>
+    <div class="card hero">
+      <div>
+        <h1>pHorest Dashboard</h1>
+        <div class="muted">Live soil chemistry with crop and fertilizer recommendations.</div>
+      </div>
+      <div class="mode-pill">MODE: <strong id="mode">loading...</strong></div>
     </div>
 
     <div class="card">
@@ -60,14 +183,14 @@ HTML = """
     <div class="card">
       <div class="label">Chemical Status</div>
       <div class="status" id="status">Waiting for first reading...</div>
-      <div class="muted" id="action"></div>
-      <div class="muted" id="fertilizerReason"></div>
+      <div class="subtext" id="action"></div>
+      <div class="subtext" id="fertilizerReason"></div>
     </div>
 
     <div class="card">
       <div class="label">Raw sensor packet</div>
-      <div id="raw" class="muted">-</div>
-      <div class="muted" style="margin-top:8px;">Last updated: <span id="updated">-</span></div>
+      <div id="raw" class="raw-box">-</div>
+      <div class="muted" style="margin-top:10px;">Last updated: <span id="updated">-</span></div>
     </div>
   </div>
 
