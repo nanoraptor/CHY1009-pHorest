@@ -1,23 +1,48 @@
+#include <DHT.h>
+#include <LiquidCrystal_I2C.h>
+#include <Wire.h>
+
+#define PH_PIN A0
+#define TDS_PIN A1
+#define DHT_PIN 2
+#define DHT_TYPE DHT11
+
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+DHT dht(DHT_PIN, DHT_TYPE);
+
 void setup() {
   Serial.begin(9600);
+  lcd.init();
+  lcd.backlight();
+  dht.begin();
 }
 
 void loop() {
-  // Replace these stuff with actual analogRead(pin) from the sensors
-  float ph = analogRead(A0) * (14.0 / 1024.0); // Simple pH conversion
-  float temp = 28.5; // If you have a DHT11, read it here
-  float hum = 65.0;
-  float tds = analogRead(A1); // TDS as a proxy for N, P, K
-  
-  // Format: Nitrogen,phosphorus,potassium,temperature,humidity,ph,rainfall
-  // Use TDS sensor as proxy for NPK
-  Serial.print(tds/3); Serial.print(","); 
-  Serial.print(tds/3); Serial.print(",");
-  Serial.print(tds/3); Serial.print(",");
-  Serial.print(temp); Serial.print(",");
-  Serial.print(hum); Serial.print(",");
-  Serial.print(ph); Serial.print(",");
-  Serial.println("0"); // 0 for rainfall
-  
-  delay(2000); 
+  int phRaw = analogRead(PH_PIN);
+  int tdsRaw = analogRead(TDS_PIN);
+  float temp = dht.readTemperature();
+  float hum = dht.readHumidity();
+
+  Serial.print(phRaw);
+  Serial.print(",");
+  Serial.print(tdsRaw);
+  Serial.print(",");
+  Serial.print(temp);
+  Serial.print(",");
+  Serial.println(hum);
+
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("pH:");
+  lcd.print(phRaw);
+  lcd.print(" T:");
+  lcd.print(temp, 1);
+
+  lcd.setCursor(0, 1);
+  lcd.print("TDS:");
+  lcd.print(tdsRaw);
+  lcd.print(" H:");
+  lcd.print(hum, 1);
+
+  delay(2000);
 }
