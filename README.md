@@ -1,6 +1,7 @@
 # pHorest: AI-Driven Precision Soil Sustainability
 
 **A CHY1009/Environmental Science Project**
+*Developed by Amit, Jaswitha, Rahul, Prateek, and Vishal.*
 
 ## 🌿 Overview
 
