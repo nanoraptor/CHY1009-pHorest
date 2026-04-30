@@ -7,8 +7,15 @@
 #define DHT_PIN 2
 #define DHT_TYPE DHT11
 
+// Change 0x27 to 0x3F if your LCD backpack uses that address.
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 DHT dht(DHT_PIN, DHT_TYPE);
+
+void clearRow(uint8_t row) {
+  lcd.setCursor(0, row);
+  lcd.print("                ");
+  lcd.setCursor(0, row);
+}
 
 void setup() {
   Serial.begin(9600);
@@ -23,6 +30,29 @@ void loop() {
   float temp = dht.readTemperature();
   float hum = dht.readHumidity();
 
+  if (temp != temp) temp = -1.0;
+  if (hum != hum) hum = -1.0;
+
+  clearRow(0);
+  lcd.print("pH:");
+  lcd.print(phRaw);
+  lcd.print(" T:");
+  if (temp < 0) {
+    lcd.print("--.-");
+  } else {
+    lcd.print(temp, 1);
+  }
+
+  clearRow(1);
+  lcd.print("TDS:");
+  lcd.print(tdsRaw);
+  lcd.print(" H:");
+  if (hum < 0) {
+    lcd.print("--.-");
+  } else {
+    lcd.print(hum, 1);
+  }
+
   Serial.print(phRaw);
   Serial.print(",");
   Serial.print(tdsRaw);
@@ -30,19 +60,6 @@ void loop() {
   Serial.print(temp);
   Serial.print(",");
   Serial.println(hum);
-
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("pH:");
-  lcd.print(phRaw);
-  lcd.print(" T:");
-  lcd.print(temp, 1);
-
-  lcd.setCursor(0, 1);
-  lcd.print("TDS:");
-  lcd.print(tdsRaw);
-  lcd.print(" H:");
-  lcd.print(hum, 1);
 
   delay(2000);
 }

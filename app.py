@@ -2,6 +2,7 @@ import os
 import random
 import sys
 import time
+from threading import Lock
 
 import joblib
 import pandas as pd
@@ -175,6 +176,8 @@ HTML = """
       <div class="grid">
         <div class="tile"><div class="label">pH</div><div class="value" id="ph">-</div></div>
         <div class="tile"><div class="label">TDS (ppm)</div><div class="value" id="tds">-</div></div>
+        <div class="tile"><div class="label">Temperature (°C)</div><div class="value" id="temperature">-</div></div>
+        <div class="tile"><div class="label">Humidity (%)</div><div class="value" id="humidity">-</div></div>
         <div class="tile"><div class="label">Recommended Crop</div><div class="value" id="crop">-</div></div>
         <div class="tile"><div class="label">Recommended Fertilizer</div><div class="value" id="fertilizer">-</div></div>
       </div>
@@ -208,6 +211,8 @@ HTML = """
         document.getElementById('mode').textContent = data.mode;
         document.getElementById('ph').textContent = data.ph.toFixed(2);
         document.getElementById('tds').textContent = Math.round(data.tds);
+        document.getElementById('temperature').textContent = data.temperature.toFixed(1);
+        document.getElementById('humidity').textContent = data.humidity.toFixed(1);
         document.getElementById('crop').textContent = String(data.prediction).toUpperCase();
         document.getElementById('fertilizer').textContent = data.fertilizer;
         document.getElementById('raw').textContent = data.raw;
@@ -256,10 +261,15 @@ def evaluate_ph(ph_val: float):
 
 def parse_serial_line(line: str):
     parts = line.strip().split(",")
-    if len(parts) != 7:
-        raise ValueError("Expected 7 comma-separated values")
     numeric = [float(x) for x in parts]
-    return numeric
+    if len(numeric) == 7:
+        return numeric
+    if len(numeric) == 4:
+        # Arduino packet format: phRaw,tdsRaw,temp,humidity
+        ph_raw, tds_raw, temp, hum = numeric
+        npk_proxy = tds_raw / 3.0
+        return [npk_proxy, npk_proxy, npk_proxy, temp, hum, ph_raw, 100.0]
+    raise ValueError("Expected 4 or 7 comma-separated values")
 
 
 def recommend_fertilizer(crop: str, n: float, p: float, k: float, ph_val: float):
@@ -326,6 +336,8 @@ if MODE == "serial":
             SERIAL_IMPORT_ERROR = f"Cannot open {PORT}: {exc}"
 
 app = Flask(__name__)
+LATEST_READING = None
+LATEST_READING_LOCK = Lock()
 
 
 @app.get("/")
@@ -347,7 +359,9 @@ def get_reading():
     else:
         ph = round(random.uniform(4.5, 8.5), 2)
         tds = random.randint(300, 800)
-        values = [tds / 3, tds / 3, tds / 3, 28.0, 60.0, ph, 100.0]
+        temp = round(random.uniform(24.0, 35.0), 1)
+        hum = round(random.uniform(45.0, 85.0), 1)
+        values = [tds / 3, tds / 3, tds / 3, temp, hum, ph, 100.0]
         raw_line = ",".join(f"{x:.2f}" for x in values)
 
     frame = pd.DataFrame([values], columns=COLS)
@@ -363,6 +377,8 @@ def get_reading():
         "mode": MODE,
         "ph": ph_val,
         "tds": values[0] + values[1] + values[2],
+        "temperature": values[3],
+        "humidity": values[4],
         "prediction": str(prediction),
         "fertilizer": fertilizer,
         "fertilizer_reason": fertilizer_reason,
@@ -376,8 +392,27 @@ def get_reading():
 
 @app.get("/api/reading")
 def api_reading():
+    global LATEST_READING
     try:
-        return jsonify(get_reading())
+        reading = get_reading()
+        with LATEST_READING_LOCK:
+            LATEST_READING = dict(reading)
+        return jsonify(reading)
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc), "mode": MODE}), 200
+
+
+@app.get("/api/latest")
+def api_latest():
+    global LATEST_READING
+    try:
+        with LATEST_READING_LOCK:
+            cached = dict(LATEST_READING) if LATEST_READING is not None else None
+        if cached is None:
+            cached = get_reading()
+            with LATEST_READING_LOCK:
+                LATEST_READING = dict(cached)
+        return jsonify(cached)
     except Exception as exc:
         return jsonify({"ok": False, "error": str(exc), "mode": MODE}), 200
 
