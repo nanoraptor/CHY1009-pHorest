@@ -272,7 +272,26 @@ HTML = """
       document.getElementById('fertilizerReason').textContent = '';
     }
 
+    function normalizeSerialError(message) {
+      const text = String(message || '').toLowerCase();
+      if (
+        text.includes('arduino not connected') ||
+        text.includes('cannot open') ||
+        text.includes('no such file or directory')
+      ) {
+        return 'Arduino not detected. Connect the board and verify the serial port.';
+      }
+      return message || 'Unable to fetch serial sensor status';
+    }
+
     async function loadSerialSensors() {
+      if (modeSelect.value !== 'serial') {
+        serialSensorsBody.textContent = 'Switch to SERIAL mode to inspect connected sensors.';
+        serialSensorsCard.style.display = 'block';
+        return;
+      }
+      serialSensorsCard.style.display = 'block';
+      serialSensorsBody.textContent = 'Checking sensor connections...';
       serialSensorsBtn.disabled = true;
       try {
         const res = await fetch('/api/serial/sensors', { cache: 'no-store' });
@@ -287,7 +306,7 @@ HTML = """
         serialSensorsBody.textContent = `${rows.join('\\n')}\\n\\nPacket: ${data.raw}\\nUpdated: ${data.timestamp}`;
         serialSensorsCard.style.display = 'block';
       } catch (e) {
-        serialSensorsBody.textContent = e.message;
+        serialSensorsBody.textContent = normalizeSerialError(e.message);
         serialSensorsCard.style.display = 'block';
       } finally {
         serialSensorsBtn.disabled = modeSelect.value !== 'serial';
@@ -302,8 +321,16 @@ HTML = """
           if (data.mode) modeSelect.value = data.mode;
           if (data.mode) updateSerialSensorControls(data.mode);
           clearReadingUI();
-          document.getElementById('status').textContent = data.error;
+          const statusMessage =
+            data.mode === 'serial'
+              ? normalizeSerialError(data.error)
+              : (data.error || 'Dashboard error');
+          document.getElementById('status').textContent = statusMessage;
           document.getElementById('status').className = 'status bad';
+          if (data.mode === 'serial') {
+            serialSensorsBody.textContent = statusMessage;
+            serialSensorsCard.style.display = 'block';
+          }
           return;
         }
 
@@ -341,6 +368,9 @@ HTML = """
         if (!data.ok) {
           throw new Error(data.error || 'Failed to switch mode');
         }
+        if (data.mode === 'serial') {
+          await loadSerialSensors();
+        }
       } catch (e) {
         const statusEl = document.getElementById('status');
         statusEl.textContent = e.message;
@@ -351,7 +381,8 @@ HTML = """
       }
     });
 
-    serialSensorsBtn.addEventListener('click', async () => {
+    serialSensorsBtn.addEventListener('click', async (event) => {
+      event.preventDefault();
       await loadSerialSensors();
     });
 
@@ -493,7 +524,7 @@ def ensure_serial_ready_locked():
             SER = SERIAL_MODULE.Serial(PORT, BAUD, timeout=1)
             time.sleep(2)
         except SERIAL_EXCEPTION as exc:
-            raise RuntimeError(f"Cannot open {PORT}: {exc}") from exc
+            raise RuntimeError("Arduino not connected") from exc
     return SER
 
 
