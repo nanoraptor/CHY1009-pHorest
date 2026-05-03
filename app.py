@@ -6,7 +6,7 @@ from threading import Lock
 
 import joblib
 import pandas as pd
-from flask import Flask, jsonify, render_template_string
+from flask import Flask, jsonify, render_template_string, request
 
 COLS = [
     "Nitrogen",
@@ -95,6 +95,16 @@ HTML = """
       background: rgba(56, 189, 248, 0.12);
     }
 
+    .mode-select {
+      margin-left: 6px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: rgba(15, 23, 42, 0.9);
+      color: var(--text);
+      padding: 4px 8px;
+      font-size: 12px;
+    }
+
     .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 
     .tile {
@@ -169,7 +179,13 @@ HTML = """
         <h1>pHorest Dashboard</h1>
         <div class="muted">Live soil chemistry with crop and fertilizer recommendations.</div>
       </div>
-      <div class="mode-pill">MODE: <strong id="mode">loading...</strong></div>
+      <div class="mode-pill">
+        MODE:
+        <select id="modeSelect" class="mode-select">
+          <option value="sim">SIM</option>
+          <option value="serial">SERIAL</option>
+        </select>
+      </div>
     </div>
 
     <div class="card">
@@ -198,17 +214,29 @@ HTML = """
   </div>
 
   <script>
+    const modeSelect = document.getElementById('modeSelect');
+
+    async function setMode(mode) {
+      const res = await fetch('/api/mode', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode }),
+      });
+      return res.json();
+    }
+
     async function refresh() {
       try {
         const res = await fetch('/api/reading', { cache: 'no-store' });
         const data = await res.json();
         if (!data.ok) {
+          if (data.mode) modeSelect.value = data.mode;
           document.getElementById('status').textContent = data.error;
           document.getElementById('status').className = 'status bad';
           return;
         }
 
-        document.getElementById('mode').textContent = data.mode;
+        modeSelect.value = data.mode;
         document.getElementById('ph').textContent = data.ph.toFixed(2);
         document.getElementById('tds').textContent = Math.round(data.tds);
         document.getElementById('temperature').textContent = data.temperature.toFixed(1);
@@ -231,6 +259,25 @@ HTML = """
         statusEl.className = 'status bad';
       }
     }
+
+    modeSelect.addEventListener('change', async (event) => {
+      const desiredMode = event.target.value;
+      modeSelect.disabled = true;
+      try {
+        const data = await setMode(desiredMode);
+        if (!data.ok) {
+          throw new Error(data.error || 'Failed to switch mode');
+        }
+      } catch (e) {
+        const statusEl = document.getElementById('status');
+        statusEl.textContent = e.message;
+        statusEl.className = 'status bad';
+      } finally {
+        modeSelect.disabled = false;
+        refresh();
+      }
+    });
+
     refresh();
     setInterval(refresh, 2000);
   </script>
@@ -319,25 +366,18 @@ except FileNotFoundError:
 MODE = os.getenv("SOURCE_MODE", "sim").lower()
 PORT = os.getenv("ARDUINO_PORT", "/dev/ttyACM0")
 BAUD = int(os.getenv("ARDUINO_BAUD", "9600"))
-SER = None
-SERIAL_IMPORT_ERROR = None
+VALID_MODES = {"sim", "serial"}
+if MODE not in VALID_MODES:
+    MODE = "sim"
 
-if MODE == "serial":
-    try:
-        import serial
-        from serial import SerialException
-    except ModuleNotFoundError:
-        SERIAL_IMPORT_ERROR = "pyserial missing. Install with: pip install pyserial"
-    else:
-        try:
-            SER = serial.Serial(PORT, BAUD, timeout=1)
-            time.sleep(2)
-        except SerialException as exc:
-            SERIAL_IMPORT_ERROR = f"Cannot open {PORT}: {exc}"
+SER = None
+SERIAL_MODULE = None
+SERIAL_EXCEPTION = None
 
 app = Flask(__name__)
 LATEST_READING = None
 LATEST_READING_LOCK = Lock()
+STATE_LOCK = Lock()
 
 
 @app.get("/")
@@ -345,24 +385,78 @@ def home():
     return render_template_string(HTML)
 
 
+def get_mode():
+    with STATE_LOCK:
+        return MODE
+
+
+def close_serial_locked():
+    global SER
+    if SER is not None:
+        SER.close()
+        SER = None
+
+
+def ensure_serial_ready_locked():
+    global SERIAL_MODULE, SERIAL_EXCEPTION, SER
+
+    if SERIAL_MODULE is None:
+        try:
+            import serial as serial_module
+            from serial import SerialException as serial_exception
+        except ModuleNotFoundError as exc:
+            raise RuntimeError(
+                "pyserial missing. Install with: pip install pyserial"
+            ) from exc
+        SERIAL_MODULE = serial_module
+        SERIAL_EXCEPTION = serial_exception
+
+    if SER is None:
+        try:
+            SER = SERIAL_MODULE.Serial(PORT, BAUD, timeout=1)
+            time.sleep(2)
+        except SERIAL_EXCEPTION as exc:
+            raise RuntimeError(f"Cannot open {PORT}: {exc}") from exc
+    return SER
+
+
+def switch_mode(new_mode: str):
+    global MODE, LATEST_READING
+    mode = str(new_mode).strip().lower()
+    if mode not in VALID_MODES:
+        raise ValueError("Mode must be 'sim' or 'serial'")
+
+    with STATE_LOCK:
+        if mode == MODE:
+            return MODE
+        if mode == "serial":
+            ensure_serial_ready_locked()
+        else:
+            close_serial_locked()
+        MODE = mode
+
+    with LATEST_READING_LOCK:
+        LATEST_READING = None
+    return mode
+
+
 def get_reading():
-    if MODE == "serial":
-        if SERIAL_IMPORT_ERROR:
-            raise RuntimeError(SERIAL_IMPORT_ERROR)
-        if SER is None:
-            raise RuntimeError("Serial connection not initialized")
-        line = SER.readline().decode("utf-8", errors="replace").strip()
-        if not line:
-            raise RuntimeError("No serial data received yet")
-        values = parse_serial_line(line)
-        raw_line = line
-    else:
-        ph = round(random.uniform(4.5, 8.5), 2)
-        tds = random.randint(300, 800)
-        temp = round(random.uniform(24.0, 35.0), 1)
-        hum = round(random.uniform(45.0, 85.0), 1)
-        values = [tds / 3, tds / 3, tds / 3, temp, hum, ph, 100.0]
-        raw_line = ",".join(f"{x:.2f}" for x in values)
+    with STATE_LOCK:
+        mode = MODE
+        if mode == "serial":
+            ser = ensure_serial_ready_locked()
+            line = ser.readline().decode("utf-8", errors="replace").strip()
+            if not line:
+                raise RuntimeError("No serial data received yet")
+            values = parse_serial_line(line)
+            raw_line = line
+        else:
+            ph = round(random.uniform(4.5, 8.5), 2)
+            tds = random.randint(300, 800)
+            temp = round(random.uniform(24.0, 35.0), 1)
+            hum = round(random.uniform(45.0, 85.0), 1)
+            values = [tds / 3, tds / 3, tds / 3, temp, hum, ph, 100.0]
+            raw_line = ",".join(f"{x:.2f}" for x in values)
 
     frame = pd.DataFrame([values], columns=COLS)
     prediction = model.predict(frame)[0]
@@ -374,7 +468,7 @@ def get_reading():
     )
     return {
         "ok": True,
-        "mode": MODE,
+        "mode": mode,
         "ph": ph_val,
         "tds": values[0] + values[1] + values[2],
         "temperature": values[3],
@@ -399,7 +493,7 @@ def api_reading():
             LATEST_READING = dict(reading)
         return jsonify(reading)
     except Exception as exc:
-        return jsonify({"ok": False, "error": str(exc), "mode": MODE}), 200
+        return jsonify({"ok": False, "error": str(exc), "mode": get_mode()}), 200
 
 
 @app.get("/api/latest")
@@ -414,7 +508,26 @@ def api_latest():
                 LATEST_READING = dict(cached)
         return jsonify(cached)
     except Exception as exc:
-        return jsonify({"ok": False, "error": str(exc), "mode": MODE}), 200
+        return jsonify({"ok": False, "error": str(exc), "mode": get_mode()}), 200
+
+
+@app.route("/api/mode", methods=["GET", "POST"])
+def api_mode():
+    if request.method == "GET":
+        return jsonify({"ok": True, "mode": get_mode(), "port": PORT, "baud": BAUD})
+
+    payload = request.get_json(silent=True) or {}
+    requested_mode = payload.get("mode")
+    try:
+        active_mode = switch_mode(requested_mode)
+        return jsonify({"ok": True, "mode": active_mode, "port": PORT, "baud": BAUD})
+    except ValueError as exc:
+        return (
+            jsonify({"ok": False, "error": str(exc), "mode": get_mode()}),
+            400,
+        )
+    except RuntimeError as exc:
+        return jsonify({"ok": False, "error": str(exc), "mode": get_mode()}), 200
 
 
 if __name__ == "__main__":
