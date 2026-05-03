@@ -1,7 +1,7 @@
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
 
-// Change 0x27 to 0x3F if the screen remains blank after adjusting the contrast screw.
+// Change 0x27 to 0x3F (if the screen remains blank after adjusting contrast)
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 void writeLine(uint8_t row, const char *text) {

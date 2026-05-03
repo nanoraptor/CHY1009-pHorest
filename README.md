@@ -3,23 +3,23 @@
 **A CHY1009/Environmental Science Project**
 *Developed by Amit, Jaswitha, Rahul, Prateek, and Vishal.*
 
-## 🌿 Overview
+## Overview
 
 pHorest is a cyber-physical system designed to combat soil acidification and nutrient runoff—major environmental concerns in modern chemistry. By integrating IoT sensors with a Random Forest Machine Learning model, the system identifies the soil's chemical state and provides precise neutralization strategies.
 
-## 🧪 Chemistry & EVS Focus
+## Chemistry & EVS Focus
 
 - **Acid-Base Equilibrium:** Monitoring soil pH to prevent aluminum toxicity.
 - **Ion Exchange Capacity:** Using TDS as a proxy for nutrient (NPK) concentration.
 - **Sustainability:** Reducing chemical waste by suggesting the "minimum necessary" fertilizer.
 
-## 🚀 Features
+## Features
 
 - **Hardware Sensing:** Real-time pH, TDS, and Temperature monitoring via Arduino.
 - **AI Inference:** Random Forest Classifier trained on agricultural datasets.
 - **Smart Recommendations:** Crop prediction + fertilizer suggestion with pH-aware chemistry advice.
 
-## 🤖 ML Algorithm & Training
+## ML Algorithm & Training
 
 ### Model used
 
@@ -68,16 +68,17 @@ print("Model saved as soil_model.pkl")
 2. Ensure runtime feature order exactly matches training feature order.
 3. Run `ser_script.py`, `sim_script.py`, or `app.py` to load the model and predict crops.
 
-## 📂 Project Structure
+## Project Structure
 
 - `ser_script.py`: Local Python bridge between Arduino and ML model.
 - `sim_script.py`: Simulation script for software-only demonstration.
 - `app.py`: Browser dashboard (live readings + crop + fertilizer recommendation).
+- `components.md`: Required hardware components and Arduino wiring map.
 - `arduino.cpp`: Arduino firmware for data acquisition.
 - `soil_model.pkl`: Serialized Random Forest model.
 - `dataset/Crop_recommendation.csv`: Dataset used for training.
 
-## 🛠️ Setup
+## Setup
 
 ### Linux / macOS
 
