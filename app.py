@@ -105,6 +105,22 @@ HTML = """
       font-size: 12px;
     }
 
+    .mode-button {
+      margin-left: 6px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: rgba(15, 23, 42, 0.9);
+      color: var(--text);
+      padding: 4px 10px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .mode-button:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+
     .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 
     .tile {
@@ -185,6 +201,7 @@ HTML = """
           <option value="sim">SIM</option>
           <option value="serial">SERIAL</option>
         </select>
+        <button id="serialSensorsBtn" class="mode-button" type="button" style="display:none;">Connected Sensors</button>
       </div>
     </div>
 
@@ -211,10 +228,18 @@ HTML = """
       <div id="raw" class="raw-box">-</div>
       <div class="muted" style="margin-top:10px;">Last updated: <span id="updated">-</span></div>
     </div>
+
+    <div class="card" id="serialSensorsCard" style="display:none;">
+      <div class="label">Connected Sensors (Serial Mode)</div>
+      <div id="serialSensorsBody" class="raw-box">Switch to SERIAL mode and click "Connected Sensors".</div>
+    </div>
   </div>
 
   <script>
     const modeSelect = document.getElementById('modeSelect');
+    const serialSensorsBtn = document.getElementById('serialSensorsBtn');
+    const serialSensorsCard = document.getElementById('serialSensorsCard');
+    const serialSensorsBody = document.getElementById('serialSensorsBody');
 
     async function setMode(mode) {
       const res = await fetch('/api/mode', {
@@ -225,18 +250,51 @@ HTML = """
       return res.json();
     }
 
+    function updateSerialSensorControls(mode) {
+      const serialMode = mode === 'serial';
+      serialSensorsBtn.style.display = serialMode ? 'inline-block' : 'none';
+      serialSensorsBtn.disabled = !serialMode;
+      if (!serialMode) {
+        serialSensorsCard.style.display = 'none';
+      }
+    }
+
+    async function loadSerialSensors() {
+      serialSensorsBtn.disabled = true;
+      try {
+        const res = await fetch('/api/serial/sensors', { cache: 'no-store' });
+        const data = await res.json();
+        if (!data.ok) {
+          throw new Error(data.error || 'Unable to fetch serial sensor status');
+        }
+        const rows = data.sensors.map((sensor) => {
+          const flag = sensor.connected ? 'CONNECTED' : 'MISSING';
+          return `${flag.padEnd(10)} | ${sensor.name.padEnd(22)} | ${sensor.value}`;
+        });
+        serialSensorsBody.textContent = `${rows.join('\n')}\n\nPacket: ${data.raw}\nUpdated: ${data.timestamp}`;
+        serialSensorsCard.style.display = 'block';
+      } catch (e) {
+        serialSensorsBody.textContent = e.message;
+        serialSensorsCard.style.display = 'block';
+      } finally {
+        serialSensorsBtn.disabled = modeSelect.value !== 'serial';
+      }
+    }
+
     async function refresh() {
       try {
         const res = await fetch('/api/reading', { cache: 'no-store' });
         const data = await res.json();
         if (!data.ok) {
           if (data.mode) modeSelect.value = data.mode;
+          if (data.mode) updateSerialSensorControls(data.mode);
           document.getElementById('status').textContent = data.error;
           document.getElementById('status').className = 'status bad';
           return;
         }
 
         modeSelect.value = data.mode;
+        updateSerialSensorControls(data.mode);
         document.getElementById('ph').textContent = data.ph.toFixed(2);
         document.getElementById('tds').textContent = Math.round(data.tds);
         document.getElementById('temperature').textContent = data.temperature.toFixed(1);
@@ -276,6 +334,10 @@ HTML = """
         modeSelect.disabled = false;
         refresh();
       }
+    });
+
+    serialSensorsBtn.addEventListener('click', async () => {
+      await loadSerialSensors();
     });
 
     refresh();
@@ -440,6 +502,52 @@ def switch_mode(new_mode: str):
     return mode
 
 
+def _safe_float(text):
+    try:
+        return float(str(text).strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def _is_non_nan(value):
+    return value is not None and value == value
+
+
+def build_serial_sensor_status(reading: dict):
+    raw_line = str(reading.get("raw", "")).strip()
+    parts = [p.strip() for p in raw_line.split(",")] if raw_line else []
+    if len(parts) < 4:
+        raise RuntimeError("Serial packet does not contain all expected sensor fields")
+
+    ph_raw = _safe_float(parts[0])
+    tds_raw = _safe_float(parts[1])
+    temp_val = _safe_float(parts[2])
+    hum_val = _safe_float(parts[3])
+
+    return [
+        {
+            "name": "pH Sensor (A0)",
+            "connected": _is_non_nan(ph_raw),
+            "value": f"raw={parts[0]}",
+        },
+        {
+            "name": "TDS Sensor (A1)",
+            "connected": _is_non_nan(tds_raw),
+            "value": f"raw={parts[1]}",
+        },
+        {
+            "name": "DHT11 Temperature",
+            "connected": _is_non_nan(temp_val) and temp_val >= 0,
+            "value": f"{parts[2]} C",
+        },
+        {
+            "name": "DHT11 Humidity",
+            "connected": _is_non_nan(hum_val) and hum_val >= 0,
+            "value": f"{parts[3]} %",
+        },
+    ]
+
+
 def get_reading():
     with STATE_LOCK:
         mode = MODE
@@ -527,6 +635,43 @@ def api_mode():
             400,
         )
     except RuntimeError as exc:
+        return jsonify({"ok": False, "error": str(exc), "mode": get_mode()}), 200
+
+
+@app.get("/api/serial/sensors")
+def api_serial_sensors():
+    global LATEST_READING
+    if get_mode() != "serial":
+        return (
+            jsonify(
+                {
+                    "ok": False,
+                    "error": "Switch to SERIAL mode to inspect connected sensors",
+                    "mode": get_mode(),
+                }
+            ),
+            200,
+        )
+
+    try:
+        with LATEST_READING_LOCK:
+            reading = dict(LATEST_READING) if LATEST_READING is not None else None
+        if reading is None or reading.get("mode") != "serial":
+            reading = get_reading()
+            with LATEST_READING_LOCK:
+                LATEST_READING = dict(reading)
+
+        sensors = build_serial_sensor_status(reading)
+        return jsonify(
+            {
+                "ok": True,
+                "mode": "serial",
+                "sensors": sensors,
+                "raw": reading.get("raw", ""),
+                "timestamp": reading.get("timestamp", ""),
+            }
+        )
+    except Exception as exc:
         return jsonify({"ok": False, "error": str(exc), "mode": get_mode()}), 200
 
 
