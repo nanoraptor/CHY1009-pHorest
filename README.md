@@ -66,12 +66,12 @@ print("Model saved as soil_model.pkl")
 
 1. Place `soil_model.pkl` in the project root.
 2. Ensure runtime feature order exactly matches training feature order.
-3. Run `pscript.py`, `testscript.py`, or `app.py` to load the model and predict crops.
+3. Run `ser_script.py`, `sim_script.py`, or `app.py` to load the model and predict crops.
 
 ## 📂 Project Structure
 
-- `pscript.py`: Local Python bridge between Arduino and ML model.
-- `testscript.py`: Simulation script for software-only demonstration.
+- `ser_script.py`: Local Python bridge between Arduino and ML model.
+- `sim_script.py`: Simulation script for software-only demonstration.
 - `app.py`: Browser dashboard (live readings + crop + fertilizer recommendation).
 - `arduino.cpp`: Arduino firmware for data acquisition.
 - `soil_model.pkl`: Serialized Random Forest model.
@@ -81,7 +81,7 @@ print("Model saved as soil_model.pkl")
 
 ### Linux / macOS
 
-1. Connect Arduino (commonly `/dev/ttyACM0` or `/dev/ttyUSB0`).
+1. Connect Arduino (for live mode), commonly `/dev/ttyACM0` or `/dev/ttyUSB0`.
 2. Install dependencies:
 
    ```bash
@@ -89,29 +89,25 @@ print("Model saved as soil_model.pkl")
    ```
 
 3. Run:
-   - Hardware terminal mode:
+   - Terminal:
 
-     ```bash
-     ARDUINO_PORT=/dev/ttyACM0 python3 pscript.py
-     ```
+      ```bash
+      # Simulation
+      python3 sim_script.py
 
-   - Simulation terminal mode:
+      # Serial
+      python3 ser_script.py --port=/dev/ttyACM0
+      ```
 
-     ```bash
-     python3 testscript.py
-     ```
+   - Browser dashboard:
 
-   - Browser dashboard (simulation):
+      ```bash
+      # Simulation (default)
+      python3 app.py
 
-     ```bash
-     python3 app.py
-     ```
-
-   - Browser dashboard (live Arduino):
-
-     ```bash
-     SOURCE_MODE=serial ARDUINO_PORT=/dev/ttyACM0 python3 app.py
-     ```
+      # Serial
+      python3 app.py --serial /dev/ttyACM0
+      ```
 
 ### Windows
 
@@ -123,32 +119,32 @@ print("Model saved as soil_model.pkl")
    ```
 
 3. Run:
-   - Hardware terminal mode:
+   - Terminal:
 
-     ```powershell
-     set ARDUINO_PORT=COM3
-     py pscript.py
-     ```
+      ```powershell
+      # Simulation
+      py sim_script.py
 
-   - Simulation terminal mode:
+      # Serial
+      py ser_script.py --port=COM3
+      ```
 
-     ```powershell
-     py testscript.py
-     ```
+   - Browser dashboard:
 
-   - Browser dashboard (simulation):
+      ```powershell
+      # Simulation (default)
+      py app.py
 
-     ```powershell
-     py app.py
-     ```
+      # Serial
+      py app.py --serial COM3
+      ```
 
-   - Browser dashboard (live Arduino):
+### `app.py` mode flags
 
-     ```powershell
-     set SOURCE_MODE=serial
-     set ARDUINO_PORT=COM3
-     py app.py
-     ```
+- `app.py` → starts in **SIM** mode
+- `app.py --sim` → explicitly starts in **SIM** mode
+- `app.py --serial <PORT>` → starts in **SERIAL** mode
+- `--lock-mode` → hides the mode selector and prevents switching modes during runtime
 
 ## 🌐 Browser Dashboard
 

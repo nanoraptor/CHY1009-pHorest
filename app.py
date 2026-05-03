@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+import argparse
 import os
 import random
 import sys
@@ -7,6 +9,38 @@ from threading import Lock
 import joblib
 import pandas as pd
 from flask import Flask, jsonify, render_template_string, request
+
+VALID_MODES = {"sim", "serial"}
+
+
+def parse_start_mode_args(argv):
+    parser = argparse.ArgumentParser(description="Run the pHorest dashboard server.")
+    mode_group = parser.add_mutually_exclusive_group()
+    mode_group.add_argument("--sim", action="store_true", help="Start in simulation mode")
+    mode_group.add_argument("--serial", action="store_true", help="Start in serial mode")
+    parser.add_argument(
+        "--lock-mode",
+        action="store_true",
+        help="Hide mode selector and lock the startup mode",
+    )
+    parser.add_argument(
+        "serial_port",
+        nargs="?",
+        help="Serial port for --serial (example: /dev/ttyACM0 or COM3)",
+    )
+    args, _ = parser.parse_known_args(argv)
+    if args.serial_port and not args.serial:
+        parser.error("serial_port can only be used with --serial")
+    if args.sim:
+        return "sim", None, args.lock_mode
+    if args.serial:
+        return "serial", args.serial_port, args.lock_mode
+    return None, None, args.lock_mode
+
+
+CLI_MODE_OVERRIDE, CLI_PORT_OVERRIDE, CLI_LOCK_MODE = (
+    parse_start_mode_args(sys.argv[1:]) if __name__ == "__main__" else (None, None, False)
+)
 
 COLS = [
     "Nitrogen",
@@ -105,22 +139,6 @@ HTML = """
       font-size: 12px;
     }
 
-    .mode-button {
-      margin-left: 6px;
-      border-radius: 8px;
-      border: 1px solid var(--border);
-      background: rgba(15, 23, 42, 0.9);
-      color: var(--text);
-      padding: 4px 10px;
-      font-size: 12px;
-      cursor: pointer;
-    }
-
-    .mode-button:disabled {
-      opacity: 0.6;
-      cursor: default;
-    }
-
     .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 
     .tile {
@@ -195,13 +213,12 @@ HTML = """
         <h1>pHorest Dashboard</h1>
         <div class="muted">Live soil chemistry with crop and fertilizer recommendations.</div>
       </div>
-      <div class="mode-pill">
+      <div class="mode-pill"{% if mode_locked %} style="display:none;"{% endif %}>
         MODE:
         <select id="modeSelect" class="mode-select">
           <option value="sim">SIM</option>
           <option value="serial">SERIAL</option>
         </select>
-        <button id="serialSensorsBtn" class="mode-button" type="button" style="display:none;">Connected Sensors</button>
       </div>
     </div>
 
@@ -231,13 +248,13 @@ HTML = """
 
     <div class="card" id="serialSensorsCard" style="display:none;">
       <div class="label">Connected Sensors (Serial Mode)</div>
-      <div id="serialSensorsBody" class="raw-box">Switch to SERIAL mode and click "Connected Sensors".</div>
+      <div id="serialSensorsBody" class="raw-box">Switch to SERIAL mode to inspect connected sensors.</div>
     </div>
   </div>
 
   <script>
     const modeSelect = document.getElementById('modeSelect');
-    const serialSensorsBtn = document.getElementById('serialSensorsBtn');
+    const modeLocked = {{ 'true' if mode_locked else 'false' }};
     const serialSensorsCard = document.getElementById('serialSensorsCard');
     const serialSensorsBody = document.getElementById('serialSensorsBody');
 
@@ -252,11 +269,7 @@ HTML = """
 
     function updateSerialSensorControls(mode) {
       const serialMode = mode === 'serial';
-      serialSensorsBtn.style.display = serialMode ? 'inline-block' : 'none';
-      serialSensorsBtn.disabled = !serialMode;
-      if (!serialMode) {
-        serialSensorsCard.style.display = 'none';
-      }
+      serialSensorsCard.style.display = serialMode ? 'block' : 'none';
     }
 
     function clearReadingUI() {
@@ -284,15 +297,16 @@ HTML = """
       return message || 'Unable to fetch serial sensor status';
     }
 
-    async function loadSerialSensors() {
+    async function loadSerialSensors(options = {}) {
+      const silent = Boolean(options.silent);
       if (modeSelect.value !== 'serial') {
-        serialSensorsBody.textContent = 'Switch to SERIAL mode to inspect connected sensors.';
-        serialSensorsCard.style.display = 'block';
+        serialSensorsCard.style.display = 'none';
         return;
       }
       serialSensorsCard.style.display = 'block';
-      serialSensorsBody.textContent = 'Checking sensor connections...';
-      serialSensorsBtn.disabled = true;
+      if (!silent) {
+        serialSensorsBody.textContent = 'Checking sensor connections...';
+      }
       try {
         const res = await fetch('/api/serial/sensors', { cache: 'no-store' });
         const data = await res.json();
@@ -308,8 +322,6 @@ HTML = """
       } catch (e) {
         serialSensorsBody.textContent = normalizeSerialError(e.message);
         serialSensorsCard.style.display = 'block';
-      } finally {
-        serialSensorsBtn.disabled = modeSelect.value !== 'serial';
       }
     }
 
@@ -352,6 +364,9 @@ HTML = """
         actionEl.textContent = data.action;
         fertilizerReasonEl.textContent = data.fertilizer_reason;
         statusEl.className = 'status ' + data.level;
+        if (data.mode === 'serial') {
+          await loadSerialSensors({ silent: true });
+        }
       } catch (e) {
         clearReadingUI();
         const statusEl = document.getElementById('status');
@@ -360,31 +375,30 @@ HTML = """
       }
     }
 
-    modeSelect.addEventListener('change', async (event) => {
-      const desiredMode = event.target.value;
+    if (modeLocked) {
       modeSelect.disabled = true;
-      try {
-        const data = await setMode(desiredMode);
-        if (!data.ok) {
-          throw new Error(data.error || 'Failed to switch mode');
+    } else {
+      modeSelect.addEventListener('change', async (event) => {
+        const desiredMode = event.target.value;
+        modeSelect.disabled = true;
+        try {
+          const data = await setMode(desiredMode);
+          if (!data.ok) {
+            throw new Error(data.error || 'Failed to switch mode');
+          }
+          if (data.mode === 'serial') {
+            await loadSerialSensors();
+          }
+        } catch (e) {
+          const statusEl = document.getElementById('status');
+          statusEl.textContent = e.message;
+          statusEl.className = 'status bad';
+        } finally {
+          modeSelect.disabled = false;
+          refresh();
         }
-        if (data.mode === 'serial') {
-          await loadSerialSensors();
-        }
-      } catch (e) {
-        const statusEl = document.getElementById('status');
-        statusEl.textContent = e.message;
-        statusEl.className = 'status bad';
-      } finally {
-        modeSelect.disabled = false;
-        refresh();
-      }
-    });
-
-    serialSensorsBtn.addEventListener('click', async (event) => {
-      event.preventDefault();
-      await loadSerialSensors();
-    });
+      });
+    }
 
     refresh();
     setInterval(refresh, 2000);
@@ -474,7 +488,7 @@ except FileNotFoundError:
 MODE = os.getenv("SOURCE_MODE", "sim").lower()
 PORT = os.getenv("ARDUINO_PORT", "/dev/ttyACM0")
 BAUD = int(os.getenv("ARDUINO_BAUD", "9600"))
-VALID_MODES = {"sim", "serial"}
+MODE_LOCKED = False
 if MODE not in VALID_MODES:
     MODE = "sim"
 
@@ -490,7 +504,7 @@ STATE_LOCK = Lock()
 
 @app.get("/")
 def home():
-    return render_template_string(HTML)
+    return render_template_string(HTML, mode_locked=MODE_LOCKED)
 
 
 def get_mode():
@@ -666,7 +680,28 @@ def api_latest():
 @app.route("/api/mode", methods=["GET", "POST"])
 def api_mode():
     if request.method == "GET":
-        return jsonify({"ok": True, "mode": get_mode(), "port": PORT, "baud": BAUD})
+        return jsonify(
+            {
+                "ok": True,
+                "mode": get_mode(),
+                "port": PORT,
+                "baud": BAUD,
+                "mode_locked": MODE_LOCKED,
+            }
+        )
+
+    if MODE_LOCKED:
+        return (
+            jsonify(
+                {
+                    "ok": False,
+                    "error": "Mode switching is locked for this launch",
+                    "mode": get_mode(),
+                    "mode_locked": True,
+                }
+            ),
+            200,
+        )
 
     payload = request.get_json(silent=True) or {}
     requested_mode = payload.get("mode")
@@ -720,6 +755,12 @@ def api_serial_sensors():
 
 
 if __name__ == "__main__":
+    if CLI_MODE_OVERRIDE is not None:
+        MODE = CLI_MODE_OVERRIDE
+    if CLI_PORT_OVERRIDE:
+        PORT = CLI_PORT_OVERRIDE
+    if CLI_LOCK_MODE:
+        MODE_LOCKED = True
     host = os.getenv("HOST", "127.0.0.1")
     port = int(os.getenv("PORT", "5000"))
     app.run(host=host, port=port, debug=False)

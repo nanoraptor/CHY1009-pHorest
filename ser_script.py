@@ -1,3 +1,4 @@
+import argparse
 import os
 import sys
 import time
@@ -27,7 +28,15 @@ except FileNotFoundError:
     print("Error: soil_model.pkl not found in project folder.")
     sys.exit(1)
 
-port = os.getenv("ARDUINO_PORT", "/dev/ttyACM0")
+parser = argparse.ArgumentParser(description="Read Arduino serial data and run crop prediction.")
+parser.add_argument(
+    "--port",
+    default=os.getenv("ARDUINO_PORT", "/dev/ttyACM0"),
+    help="Arduino serial port (example: /dev/ttyACM0 or COM3)",
+)
+args = parser.parse_args()
+
+port = args.port
 try:
     ser = serial.Serial(port, 9600, timeout=1)
 except SerialException as exc:
