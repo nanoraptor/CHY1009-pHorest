@@ -259,6 +259,19 @@ HTML = """
       }
     }
 
+    function clearReadingUI() {
+      document.getElementById('ph').textContent = '-';
+      document.getElementById('tds').textContent = '-';
+      document.getElementById('temperature').textContent = '-';
+      document.getElementById('humidity').textContent = '-';
+      document.getElementById('crop').textContent = '-';
+      document.getElementById('fertilizer').textContent = '-';
+      document.getElementById('raw').textContent = '-';
+      document.getElementById('updated').textContent = '-';
+      document.getElementById('action').textContent = '';
+      document.getElementById('fertilizerReason').textContent = '';
+    }
+
     async function loadSerialSensors() {
       serialSensorsBtn.disabled = true;
       try {
@@ -271,7 +284,7 @@ HTML = """
           const flag = sensor.connected ? 'CONNECTED' : 'MISSING';
           return `${flag.padEnd(10)} | ${sensor.name.padEnd(22)} | ${sensor.value}`;
         });
-        serialSensorsBody.textContent = `${rows.join('\n')}\n\nPacket: ${data.raw}\nUpdated: ${data.timestamp}`;
+        serialSensorsBody.textContent = `${rows.join('\\n')}\\n\\nPacket: ${data.raw}\\nUpdated: ${data.timestamp}`;
         serialSensorsCard.style.display = 'block';
       } catch (e) {
         serialSensorsBody.textContent = e.message;
@@ -288,6 +301,7 @@ HTML = """
         if (!data.ok) {
           if (data.mode) modeSelect.value = data.mode;
           if (data.mode) updateSerialSensorControls(data.mode);
+          clearReadingUI();
           document.getElementById('status').textContent = data.error;
           document.getElementById('status').className = 'status bad';
           return;
@@ -312,6 +326,7 @@ HTML = """
         fertilizerReasonEl.textContent = data.fertilizer_reason;
         statusEl.className = 'status ' + data.level;
       } catch (e) {
+        clearReadingUI();
         const statusEl = document.getElementById('status');
         statusEl.textContent = 'Dashboard fetch error';
         statusEl.className = 'status bad';
@@ -491,9 +506,7 @@ def switch_mode(new_mode: str):
     with STATE_LOCK:
         if mode == MODE:
             return MODE
-        if mode == "serial":
-            ensure_serial_ready_locked()
-        else:
+        if mode != "serial":
             close_serial_locked()
         MODE = mode
 
