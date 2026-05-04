@@ -402,6 +402,17 @@ HTML = """
 
     refresh();
     setInterval(refresh, 2000);
+
+    const modePill = document.querySelector('.mode-pill');
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'm' && !modeLocked) {
+        if (modePill.style.display === 'none') {
+          modePill.style.display = '';
+        } else {
+          modePill.style.display = 'none';
+        }
+      }
+    });
   </script>
 </body>
 </html>
