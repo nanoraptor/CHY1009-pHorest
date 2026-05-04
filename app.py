@@ -479,6 +479,40 @@ def recommend_fertilizer(crop: str, n: float, p: float, k: float, ph_val: float)
     return fertilizer, " ".join(reasons)
 
 
+def sanitize_input_values(values: list):
+    """
+    Sanitizes a list of 7 sensor values.
+    The order is N, P, K, temp, humidity, pH, rainfall.
+    Raises ValueError on validation failure.
+    """
+    if len(values) != 7:
+        raise ValueError(f"Expected 7 values for sanitization, but got {len(values)}")
+
+    sanitized = []
+    labels = ["Nitrogen", "Phosphorus", "Potassium", "Temperature", "Humidity", "pH", "Rainfall"]
+    ranges = [
+        (0, 2000),  # N
+        (0, 2000),  # P
+        (0, 2000),  # K
+        (-40, 60),  # Temp
+        (0, 100),   # Humidity
+        (0, 14),    # pH
+        (0, 1000),  # Rainfall
+    ]
+
+    for i, (val, label, (min_val, max_val)) in enumerate(zip(values, labels, ranges)):
+        try:
+            f_val = float(val)
+        except (ValueError, TypeError) as e:
+            raise ValueError(f"Invalid non-numeric value for {label}: {val}") from e
+
+        if not (min_val <= f_val <= max_val):
+            raise ValueError(f"{label} value {f_val} is out of the acceptable range ({min_val} - {max_val})")
+        sanitized.append(f_val)
+
+    return sanitized
+
+
 try:
     model = joblib.load("soil_model.pkl")
 except FileNotFoundError:
@@ -623,6 +657,8 @@ def get_reading():
             hum = round(random.uniform(45.0, 85.0), 1)
             values = [tds / 3, tds / 3, tds / 3, temp, hum, ph, 100.0]
             raw_line = ",".join(f"{x:.2f}" for x in values)
+
+    values = sanitize_input_values(values)
 
     frame = pd.DataFrame([values], columns=COLS)
     prediction = model.predict(frame)[0]
