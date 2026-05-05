@@ -147,6 +147,8 @@ print("Model saved as soil_model.pkl")
 - `app.py --serial <PORT>` → starts in **SERIAL** mode
 - `--lock-mode` → hides the mode selector and prevents switching modes during runtime
 
+> the mode selector can be hidden by pressing 'm' in normal mode.
+
 ## 🌐 Browser Dashboard
 
 Open `http://127.0.0.1:5000` after starting `app.py`.

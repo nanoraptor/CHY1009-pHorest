@@ -1,0 +1,100 @@
+PROJECT SESSION SUMMARY
+=======================
+
+Scope completed
+---------------
+1. Built/updated Arduino + Python + Web flow for:
+   - pH (A0), TDS (A1), DHT11 (D2), I2C LCD (A4/A5)
+2. Added test-only Arduino sketches for individual components.
+3. Added runtime SIM/SERIAL switching in web UI.
+4. Added serial-only "Connected Sensors" inspection panel in UI.
+5. Fixed multiple runtime/UI issues discovered during testing.
+
+
+Key file changes
+----------------
+1. app.py
+   - Added Temperature/Humidity display to dashboard.
+   - Added support for serial packets in both formats:
+     - 7 fields (model format)
+     - 4 fields: phRaw,tdsRaw,temp,humidity
+   - Added cached latest reading endpoint:
+     - GET /api/latest
+   - Added mode APIs:
+     - GET /api/mode
+     - POST /api/mode  (sim/serial)
+   - Added serial diagnostics endpoint:
+     - GET /api/serial/sensors
+   - Added UI mode dropdown (SIM/SERIAL) and serial-only "Connected Sensors" button/card.
+   - Fixed script escaping bug that broke SIM refresh.
+   - Fixed SERIAL-without-board behavior:
+     - stays in SERIAL mode (no fallback to SIM)
+   - Fixed stale SIM values shown after switching to SERIAL with no board:
+     - now clears tiles on error.
+
+2. apptest.py
+   - Created bridge to fetch readings from web API and forward to Arduino LCD.
+   - Switched default source to /api/latest.
+   - Extended payload from pH/TDS to pH/TDS/Temp/Humidity.
+   - Reduced sync lag:
+     - fast polling (default 0.1s)
+     - only writes to Arduino on changed reading key.
+
+3. arduino/lcd_only/lcd_only.ino
+   - Reworked into serial-driven LCD receiver.
+   - Accepts:
+     - ph,tds
+     - ph,tds,temp,humidity
+   - AVR-safe number formatting (avoids float printf issues).
+   - Robust parsing (manual comma parsing, no unreliable sscanf float parsing).
+
+4. arduino.cpp
+   - Final state: single combined sketch for sensor read + LCD display + serial output.
+   - Outputs serial CSV:
+     - phRaw,tdsRaw,temp,humidity
+
+5. New sensor test sketches
+   - arduino/dht_only/dht_only.ino
+     - pretty serial output for DHT11-only testing.
+   - arduino/ph_only/ph_only.ino
+     - pH signal presence test (raw ADC + voltage; no calibrated pH).
+   - arduino/arduino_full/arduino_full.ino
+     - full combined sketch for pH + TDS + DHT11 + LCD.
+
+
+Wiring decisions finalized
+--------------------------
+1. LCD (I2C): SDA->A4, SCL->A5, VCC->5V, GND->GND
+2. pH module: V+->5V, G->GND, Po->A0
+   - Do optional (threshold digital), To ignored (no temp output probe)
+3. TDS module: A->A1, VCC->5V, GND->GND
+4. DHT11: DATA->D2 (NOT A2), VCC->5V, GND->GND
+
+
+Behavior notes discussed
+------------------------
+1. Uncalibrated pH probe + cap on => fluctuating raw values are expected.
+2. pH probe should be conditioned/stored wet (KCl/storage solution).
+3. For safe soil testing: use flowable slurry/supernatant, avoid mechanical damage to bulb.
+4. SIM mode should be used until final calibration for meaningful pH values.
+
+
+Run instructions (latest)
+-------------------------
+1. From project root:
+   python3 app.py
+2. Open:
+   http://127.0.0.1:5000
+3. Use top-right mode dropdown:
+   - SIM for simulation
+   - SERIAL for live Arduino
+4. In SERIAL mode, "Connected Sensors" button shows parsed sensor presence/status.
+
+
+Git status at handoff
+---------------------
+1. Last commit on main:
+   2af39fc improved web ui
+2. Local working tree currently has uncommitted change:
+   - modified: app.py
+
