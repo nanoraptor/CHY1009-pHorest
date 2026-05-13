@@ -35,7 +35,7 @@
 
 - Keep **all grounds common** (every module GND connected to Arduino GND).
 - LCD I2C address in code is `0x27` (some modules use `0x3F`).
-- Serial output format from current sketch: `phRaw,tdsRaw,temp,humidity`.
+- Serial output format from `arduino_full.ino`: `ph,tdsPpm,temp,humidity`.
 
 ## Additional Stuff to buy
 

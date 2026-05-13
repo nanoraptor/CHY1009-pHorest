@@ -12,6 +12,11 @@ import pandas as pd
 from flask import Flask, jsonify, render_template_string, request
 
 VALID_MODES = {"sim", "serial"}
+PH_ADC_MAX = 1023.0
+PH_ADC_REF_VOLTAGE = 5.0
+PH_VOLTAGE_PH7 = 1.251
+PH_VOLTAGE_PH4 = 1.769
+PH_SLOPE = (PH_VOLTAGE_PH4 - PH_VOLTAGE_PH7) / 3.0
 
 
 def parse_start_mode_args(argv):
@@ -243,7 +248,7 @@ HTML = """
 
     <div class="card">
       <div class="label">Chemical Status</div>
-      <div class="status" id="status">Waiting for first reading...</div>
+      <div class="status" id="status">Connecting to Arduino...</div>
       <div class="subtext" id="action"></div>
       <div class="subtext" id="fertilizerReason"></div>
     </div>
@@ -287,6 +292,9 @@ HTML = """
       const text = String(message || '').toLowerCase();
       if (text.includes('permission denied')) {
         return 'Arduino found, but access to the serial port was denied. Add your user to the dialout group and reconnect.';
+      }
+      if (text.includes('device reports readiness to read but returned no data')) {
+        return 'Serial connection dropped while reading. Reconnect the Arduino USB cable and wait a few seconds.';
       }
       if (
         text.includes('arduino not connected') ||
@@ -400,15 +408,23 @@ def evaluate_ph(ph_val: float):
     )
 
 
+def ph_from_raw_adc(raw_adc: float):
+    voltage = (raw_adc * PH_ADC_REF_VOLTAGE) / PH_ADC_MAX
+    return 7.0 - ((voltage - PH_VOLTAGE_PH7) / PH_SLOPE)
+
+
 def parse_serial_line(line: str):
     parts = line.strip().split(",")
     numeric = [float(x) for x in parts]
     if len(numeric) == 7:
         return numeric
     if len(numeric) == 4:
-        # Arduino packet format: phRaw,tdsRaw,temp,humidity
-        ph_raw, tds_raw, temp, hum = numeric
-        npk_proxy = tds_raw / 3.0
+        # Arduino packet format: phValueOrRaw,tdsPpm,temp,humidity
+        # Some sketches emit pH as raw ADC (0-1023), so convert using calibration constants.
+        ph_raw, tds_ppm, temp, hum = numeric
+        if 14.0 < ph_raw <= PH_ADC_MAX:
+            ph_raw = ph_from_raw_adc(ph_raw)
+        npk_proxy = tds_ppm / 3.0
         return [npk_proxy, npk_proxy, npk_proxy, temp, hum, ph_raw, 100.0]
     raise ValueError("Expected 4 or 7 comma-separated values")
 
@@ -477,6 +493,10 @@ def sanitize_input_values(values: list, skip_ph_check: bool = False):
             f_val = float(val)
         except (ValueError, TypeError) as e:
             raise ValueError(f"Invalid non-numeric value for {label}: {val}") from e
+
+        if label == "pH" and 14.0 < f_val <= PH_ADC_MAX:
+            # Handle sketches that send raw ADC pH (0-1023) instead of calibrated pH value.
+            f_val = ph_from_raw_adc(f_val)
 
         if label == "pH" and skip_ph_check:
             sanitized.append(f_val)
@@ -694,7 +714,17 @@ def get_reading():
             raw_line = ""
 
             while time.monotonic() < deadline:
-                line = ser.readline().decode("utf-8", errors="replace").strip()
+                try:
+                    line = ser.readline().decode("utf-8", errors="replace").strip()
+                except SERIAL_EXCEPTION as exc:
+                    parse_error = exc
+                    close_serial_locked()
+                    try:
+                        ser = ensure_serial_ready_locked()
+                    except Exception as reconnect_exc:
+                        parse_error = reconnect_exc
+                        time.sleep(0.1)
+                    continue
                 if not line:
                     continue
                 try:
