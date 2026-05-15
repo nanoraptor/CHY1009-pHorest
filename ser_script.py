@@ -2,6 +2,10 @@ import argparse
 import os
 import sys
 import time
+import json
+from urllib.request import urlopen
+from urllib.parse import urlencode
+from datetime import date, timedelta
 
 import joblib
 import pandas as pd
@@ -12,6 +16,16 @@ except ModuleNotFoundError:
     print("Error: pyserial is not installed. Run: pip install pyserial")
     sys.exit(1)
 
+PH_ADC_MAX = 1023.0
+PH_ADC_REF_VOLTAGE = 5.0
+PH_VOLTAGE_PH7 = 1.251
+PH_VOLTAGE_PH4 = 1.769
+PH_SLOPE = (PH_VOLTAGE_PH4 - PH_VOLTAGE_PH7) / 3.0
+DEFAULT_HUMIDITY = 60.0
+DEFAULT_RAINFALL_MM = 100.0
+RAINFALL_WINDOW_DAYS = 30
+WEATHER_HTTP_TIMEOUT_SECONDS = 8
+
 COLS = [
     "Nitrogen",
     "phosphorus",
@@ -21,6 +35,78 @@ COLS = [
     "ph",
     "rainfall",
 ]
+
+def ph_from_raw_adc(raw_adc: float):
+    voltage = (raw_adc * PH_ADC_REF_VOLTAGE) / PH_ADC_MAX
+    return 7.0 - ((voltage - PH_VOLTAGE_PH7) / PH_SLOPE)
+
+
+def parse_serial_line(line: str, rainfall: float):
+    parts = line.strip().split(",")
+    numeric = [float(x) for x in parts]
+    if len(numeric) == 7:
+        if 14.0 < numeric[5] <= PH_ADC_MAX:
+            numeric[5] = ph_from_raw_adc(numeric[5])
+        numeric[6] = rainfall
+        return numeric
+    if len(numeric) == 4:
+        # Arduino packet format: phValueOrRaw,tdsPpm,dhtTemp,humidity
+        ph_raw, tds_ppm, temp, hum = numeric
+        if 14.0 < ph_raw <= PH_ADC_MAX:
+            ph_raw = ph_from_raw_adc(ph_raw)
+        npk_proxy = tds_ppm / 3.0
+        return [npk_proxy, npk_proxy, npk_proxy, temp, hum, ph_raw, rainfall]
+    if len(numeric) == 3:
+        # Fallback packet format: phValueOrRaw,tdsPpm,dhtTemp
+        ph_raw, tds_ppm, temp = numeric
+        if 14.0 < ph_raw <= PH_ADC_MAX:
+            ph_raw = ph_from_raw_adc(ph_raw)
+        npk_proxy = tds_ppm / 3.0
+        return [npk_proxy, npk_proxy, npk_proxy, temp, DEFAULT_HUMIDITY, ph_raw, rainfall]
+    raise ValueError("Expected 3, 4, or 7 comma-separated values")
+
+def fetch_rainfall_data(latitude: float, longitude: float):
+    end_date = date.today()
+    start_date = end_date - timedelta(days=RAINFALL_WINDOW_DAYS - 1)
+    params = {
+        "latitude": f"{latitude:.6f}",
+        "longitude": f"{longitude:.6f}",
+        "daily": "precipitation_sum",
+        "past_days": str(RAINFALL_WINDOW_DAYS),
+        "forecast_days": "0",
+        "timezone": "auto",
+    }
+    url = f"https://api.open-meteo.com/v1/forecast?{urlencode(params)}"
+
+    with urlopen(url, timeout=WEATHER_HTTP_TIMEOUT_SECONDS) as response:
+        payload = json.loads(response.read().decode("utf-8"))
+
+    daily = payload.get("daily", {})
+    time_values = daily.get("time")
+    precipitation = daily.get("precipitation_sum")
+    if (
+        not isinstance(time_values, list)
+        or not isinstance(precipitation, list)
+        or not precipitation
+        or len(time_values) != len(precipitation)
+    ):
+        raise RuntimeError("Weather API returned no precipitation data")
+
+    rainfall_values = []
+    for day_text, value in zip(time_values, precipitation):
+        if value is None:
+            continue
+        try:
+            day_value = date.fromisoformat(str(day_text))
+        except ValueError:
+            continue
+        if start_date <= day_value <= end_date:
+            rainfall_values.append(max(float(value), 0.0))
+
+    if not rainfall_values:
+        raise RuntimeError("Weather API precipitation values were empty")
+
+    return float(sum(rainfall_values))
 
 try:
     model = joblib.load("soil_model.pkl")
@@ -34,7 +120,33 @@ parser.add_argument(
     default=os.getenv("ARDUINO_PORT", "/dev/ttyACM0"),
     help="Arduino serial port (example: /dev/ttyACM0 or COM3)",
 )
+parser.add_argument("--location", nargs=2, type=float, metavar=("LAT", "LON"), help="Latitude and Longitude to fetch rainfall data.")
+parser.add_argument("--rainfall_data", type=float, help="Specify rainfall data directly.")
 args = parser.parse_args()
+
+rainfall = DEFAULT_RAINFALL_MM
+use_default_warning = False
+
+if args.location is not None:
+    try:
+        print(f"Fetching rainfall data for location: {args.location}")
+        fetched_rainfall = fetch_rainfall_data(args.location[0], args.location[1])
+        print(f"Successfully fetched rainfall data: {fetched_rainfall:.2f}mm")
+        rainfall = fetched_rainfall
+    except Exception as e:
+        print(f"Warning: Failed to fetch rainfall data from location ({e}).")
+        if args.rainfall_data is not None:
+            print(f"Falling back to rainfall_data flag: {args.rainfall_data}mm")
+            rainfall = args.rainfall_data
+        else:
+            use_default_warning = True
+elif args.rainfall_data is not None:
+    rainfall = args.rainfall_data
+else:
+    use_default_warning = True
+
+if use_default_warning:
+    print(f"Using default rainfall value: {DEFAULT_RAINFALL_MM}mm")
 
 port = args.port
 try:
@@ -55,24 +167,19 @@ try:
         if not line:
             continue
 
-        data = line.split(",")
-        if len(data) != 7:
-            print(f"Skipping malformed row (expected 7 values): {line}")
-            continue
-
         try:
-            numeric = [float(v) for v in data]
-        except ValueError:
-            print(f"Skipping non-numeric row: {line}")
+            values = parse_serial_line(line, rainfall)
+        except (ValueError, IndexError) as e:
+            print(f"Skipping malformed row: {line} ({e})")
             continue
 
-        current_readings = pd.DataFrame([numeric], columns=COLS)
+        current_readings = pd.DataFrame([values], columns=COLS)
         prediction = model.predict(current_readings)[0]
 
         print(f"--- Sensor Data: {line} ---")
         print(f"Recommended Crop: {prediction}")
 
-        ph_val = numeric[5]
+        ph_val = values[5]
         if ph_val < 5.5:
             print("ACTION: Soil is acidic. Suggest adding Lime (CaCO3).")
         elif ph_val > 7.5:

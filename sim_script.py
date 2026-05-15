@@ -4,6 +4,11 @@ import time
 import random
 import os
 import sys
+import argparse
+from urllib.request import urlopen
+from urllib.parse import urlencode
+from datetime import date, timedelta
+import json
 
 # ANSI Colors for a cool terminal look
 GREEN = "\033[92m"
@@ -12,12 +17,88 @@ YELLOW = "\033[93m"
 RESET = "\033[0m"
 BOLD = "\033[1m"
 
+DEFAULT_RAINFALL_MM = 100.0
+RAINFALL_WINDOW_DAYS = 30
+WEATHER_HTTP_TIMEOUT_SECONDS = 8
+
+def fetch_rainfall_data(latitude: float, longitude: float):
+    end_date = date.today()
+    start_date = end_date - timedelta(days=RAINFALL_WINDOW_DAYS - 1)
+    params = {
+        "latitude": f"{latitude:.6f}",
+        "longitude": f"{longitude:.6f}",
+        "daily": "precipitation_sum",
+        "past_days": str(RAINFALL_WINDOW_DAYS),
+        "forecast_days": "0",
+        "timezone": "auto",
+    }
+    url = f"https://api.open-meteo.com/v1/forecast?{urlencode(params)}"
+
+    with urlopen(url, timeout=WEATHER_HTTP_TIMEOUT_SECONDS) as response:
+        payload = json.loads(response.read().decode("utf-8"))
+
+    daily = payload.get("daily", {})
+    time_values = daily.get("time")
+    precipitation = daily.get("precipitation_sum")
+    if (
+        not isinstance(time_values, list)
+        or not isinstance(precipitation, list)
+        or not precipitation
+        or len(time_values) != len(precipitation)
+    ):
+        raise RuntimeError("Weather API returned no precipitation data")
+
+    rainfall_values = []
+    for day_text, value in zip(time_values, precipitation):
+        if value is None:
+            continue
+        try:
+            day_value = date.fromisoformat(str(day_text))
+        except ValueError:
+            continue
+        if start_date <= day_value <= end_date:
+            rainfall_values.append(max(float(value), 0.0))
+
+    if not rainfall_values:
+        raise RuntimeError("Weather API precipitation values were empty")
+
+    return float(sum(rainfall_values))
+
 # Load model
 try:
     model = joblib.load("soil_model.pkl")
 except FileNotFoundError:
     print(f"{RED}Error: soil_model.pkl not found!{RESET}")
     sys.exit(1)
+
+parser = argparse.ArgumentParser(description="Run the simulation script with optional rainfall data.")
+parser.add_argument("--location", nargs=2, type=float, metavar=("LAT", "LON"), help="Latitude and Longitude to fetch rainfall data.")
+parser.add_argument("--rainfall_data", type=float, help="Specify rainfall data directly.")
+args = parser.parse_args()
+
+rainfall = DEFAULT_RAINFALL_MM
+use_default_warning = False
+
+if args.location is not None:
+    try:
+        print(f"{YELLOW}Fetching rainfall data for location: {args.location}{RESET}")
+        fetched_rainfall = fetch_rainfall_data(args.location[0], args.location[1])
+        print(f"{GREEN}Successfully fetched rainfall data: {fetched_rainfall:.2f}mm{RESET}")
+        rainfall = fetched_rainfall
+    except Exception as e:
+        print(f"{RED}Warning: Failed to fetch rainfall data from location ({e}).{RESET}")
+        if args.rainfall_data is not None:
+            print(f"{YELLOW}Falling back to rainfall_data flag: {args.rainfall_data}mm{RESET}")
+            rainfall = args.rainfall_data
+        else:
+            use_default_warning = True
+elif args.rainfall_data is not None:
+    rainfall = args.rainfall_data
+else:
+    use_default_warning = True
+
+if use_default_warning:
+    print(f"{RED}Using default rainfall value: {DEFAULT_RAINFALL_MM}mm{RESET}")
 
 os.system("clear")
 print(f"{BOLD}--- AI SUSTAINABILITY: SOIL CHEMISTRY MONITOR ---{RESET}")
@@ -27,6 +108,8 @@ try:
         # Simulated values
         ph = round(random.uniform(4.5, 8.5), 2)
         tds = random.randint(300, 800)
+        temp = round(random.uniform(20.0, 35.0), 1)
+        humidity = round(random.uniform(40.0, 80.0), 1)
 
         # Matching your CSV columns exactly
         cols = [
@@ -40,12 +123,12 @@ try:
         ]
         # Using TDS/3 as a proxy for N,P,K
         data = pd.DataFrame(
-            [[tds / 3, tds / 3, tds / 3, 28.0, 60.0, ph, 100.0]], columns=cols
+            [[tds / 3, tds / 3, tds / 3, temp, humidity, ph, rainfall]], columns=cols
         )
 
         prediction = model.predict(data)[0]
 
-        print(f"Sensors -> pH: {ph} | TDS: {tds} ppm")
+        print(f"Sensors -> pH: {ph} | TDS: {tds} ppm | Temp: {temp}°C | Humidity: {humidity}%")
         print(f"AI Result -> {GREEN}{BOLD}{prediction.upper()}{RESET}")
 
         # Chemistry EVS Logic
