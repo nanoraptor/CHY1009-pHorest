@@ -128,7 +128,7 @@ try:
 
         prediction = model.predict(data)[0]
 
-        print(f"Sensors -> pH: {ph} | TDS: {tds} ppm | Temp: {temp}°C | Humidity: {humidity}%")
+        print(f"Sensors -> pH: {ph} | TDS: {tds} ppm | Temp: {temp}°C | Humidity: {humidity}% | Rainfall: {rainfall:.2f}mm")
         print(f"AI Result -> {GREEN}{BOLD}{prediction.upper()}{RESET}")
 
         # Chemistry EVS Logic

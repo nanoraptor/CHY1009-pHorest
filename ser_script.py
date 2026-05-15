@@ -177,6 +177,7 @@ try:
         prediction = model.predict(current_readings)[0]
 
         print(f"--- Sensor Data: {line} ---")
+        print(f"--- Rainfall: {rainfall:.2f}mm ---")
         print(f"Recommended Crop: {prediction}")
 
         ph_val = values[5]
