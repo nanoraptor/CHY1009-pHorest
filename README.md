@@ -33,35 +33,39 @@ pHorest is a cyber-physical system designed to combat soil acidification and nut
 - **Target label:** `label` (crop name)
 - **Train/test split:** `80/20` using `train_test_split(..., test_size=0.2, random_state=42)`
 - **Model params used:** `n_estimators=100`, `random_state=42`
-- **Saved model artifact:** `soil_model.pkl` (via `joblib.dump`)
+- **Saved model artifact:** `random forest/model/soil_model.pkl` (via `joblib.dump`)
 
 ### Training environment
 
 - Trained in **Google Colab (Jupyter Notebook)**.
-- Training code used: same as `training/train.ipynb` in this repo
-- Dataset used: `Crop_recommendation.csv` (same schema as `dataset/Crop_recommendation.csv` in this repo).
+- Training code used: same as `random forest/training/train.ipynb` in this repo
+- Dataset used: `Crop_recommendation.csv` (same schema as `random forest/dataset/Crop_recommendation.csv` in this repo).
 
 ### Using the trained model in this project
 
-1. Place `soil_model.pkl` in the project root.
+1. Place `random forest/model/soil_model.pkl` in the `random forest/model/` directory.
 2. Ensure runtime feature order exactly matches training feature order.
-3. Run `ser_script.py`, `sim_script.py`, or `app.py` to load the model and predict crops.
+3. Run `scripts/ser_script.py`, `scripts/sim_script.py`, or `app/app.py` to load the model and predict crops.
 
 ## Project Structure
 
-- `ser_script.py`: Local Python bridge between Arduino and ML model.
-- `sim_script.py`: Simulation script for software-only demonstration.
-- `app.py`: Browser dashboard (live readings + crop + fertilizer recommendation).
-- `physical_setup.md`: Required hardware components and Arduino wiring map.
+- `app/app.py`: Browser dashboard (live readings + crop + fertilizer recommendation).
+- `scripts/`: Contains utility scripts.
+  - `ser_script.py`: Local Python bridge between Arduino and ML model.
+  - `sim_script.py`: Simulation script for software-only demonstration.
+- `random forest/`: Contains all machine learning related files.
+  - `dataset/`: Contains the dataset.
+    - `Crop_recommendation.csv`: The dataset used for training.
+  - `model/`: Contains the trained model.
+    - `soil_model.pkl`: Serialized Random Forest model.
+  - `training/`: Contains the training notebook.
+    - `train.ipynb`: Jupyter notebook for training the model.
+- `setup.md`: Required hardware components and Arduino wiring map.
 - `arduino/`: Directory containing Arduino firmware files for data acquisition.
-
-- `soil_model.pkl`: Serialized Random Forest model.
-- `dataset/`: Directory containing datasets.
-- `training/`: Directory containing training code.
 
 ## Setup
 
-Before proceeding, make sure you have the physical setup ready. You can know more about it in the `physical_setup.md` file in the repo
+Before proceeding, make sure you have the physical setup ready. You can know more about it in the `setup.md` file in the repo
 
 ### Linux / macOS
 
@@ -77,23 +81,23 @@ Before proceeding, make sure you have the physical setup ready. You can know mor
 
       ```bash
       # Simulation
-      python3 sim_script.py
+      python3 scripts/sim_script.py
 
       # Serial
-      python3 ser_script.py --port=/dev/ttyACM0
+      python3 scripts/ser_script.py --port=/dev/ttyACM0
       ```
 
     - Browser dashboard:
 
        ```bash
        # Simulation (default)
-       python3 app.py
+       python3 app/app.py
 
        # Serial (explicit port)
-       python3 app.py --serial /dev/ttyACM0
+       python3 app/app.py --serial /dev/ttyACM0
 
        # Serial (auto-detect first available Arduino-like port)
-       python3 app.py --serial
+       python3 app/app.py --serial
        ```
 
 ### Windows
@@ -110,30 +114,30 @@ Before proceeding, make sure you have the physical setup ready. You can know mor
 
       ```powershell
       # Simulation
-      py sim_script.py
+      py scripts/sim_script.py
 
       # Serial
-      py ser_script.py --port=COM3
+      py scripts/ser_script.py --port=COM3
       ```
 
    - Browser dashboard:
 
       ```powershell
       # Simulation (default)
-      py app.py
+      py app/app.py
 
       # Serial
-      py app.py --serial COM3
+      py app/app.py --serial COM3
       ```
 
 ## Flags
 
-### App flags (`app.py`)
+### App flags (`app/app.py`)
 
-- `app.py` → starts in **SIM** mode
-- `app.py --sim` → explicitly starts in **SIM** mode
-- `app.py --serial <PORT>` → starts in **SERIAL** mode
-- `app.py --serial` → starts in **SERIAL** mode and auto-detects the port if `/dev/ttyACM0` is unavailable
+- `app/app.py` → starts in **SIM** mode
+- `app/app.py --sim` → explicitly starts in **SIM** mode
+- `app/app.py --serial <PORT>` → starts in **SERIAL** mode
+- `app/app.py --serial` → starts in **SERIAL** mode and auto-detects the port if `/dev/ttyACM0` is unavailable
 - `--lock-mode` → hides the mode selector and prevents switching modes during runtime
 - `--no-check` → skips strict pH input range validation (chemical status still shown)
 
@@ -141,18 +145,18 @@ Before proceeding, make sure you have the physical setup ready. You can know mor
 
 ```bash
 # Start in simulation mode
-python3 app.py
+python3 app/app.py
 
 # Start in serial mode with a specific port
-python3 app.py --serial /dev/ttyACM0
+python3 app/app.py --serial /dev/ttyACM0
 
 # Start in serial mode with auto-port detection and locked UI
-python3 app.py --serial --lock-mode
+python3 app/app.py --serial --lock-mode
 ```
 
 > the mode selector can be hidden by pressing 'm' in normal mode.
 
-### Script Flags (`sim_script.py`, `ser_script.py`)
+### Script Flags (`scripts/sim_script.py`, `scripts/ser_script.py`)
 
 These scripts support optional flags to provide rainfall data:
 
@@ -165,21 +169,21 @@ These scripts support optional flags to provide rainfall data:
 
 ```bash
 # Simulation with location-based rainfall
-python3 sim_script.py --location 34.0522 -118.2437
+python3 scripts/sim_script.py --location 34.0522 -118.2437
 
 # Simulation with direct rainfall data
-python3 sim_script.py --rainfall_data 150.0
+python3 scripts/sim_script.py --rainfall_data 150.0
 
 # Serial with location-based rainfall
-python3 ser_script.py --port=/dev/ttyACM0 --location 34.0522 -118.2437
+python3 scripts/ser_script.py --port=/dev/ttyACM0 --location 34.0522 -118.2437
 
 # Serial with direct rainfall data
-python3 ser_script.py --port=/dev/ttyACM0 --rainfall_data 150.0
+python3 scripts/ser_script.py --port=/dev/ttyACM0 --rainfall_data 150.0
 ```
 
 ## 🌐 Browser Dashboard
 
-Open `http://127.0.0.1:5000` after starting `app.py`.
+Open `http://127.0.0.1:5000` after starting `app/app.py`.
 
 - Set your coordinates using **Use Browser Location** or manual latitude/longitude.
 - The app fetches **rolling 30-day rainfall (mm)** online and feeds it to the model.
