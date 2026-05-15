@@ -44,6 +44,7 @@
 ## Additional Stuff to buy and important notes
 
 - While the above listed items are enough for the base project. You might have to buy pH buffer solutions and to calibrate the pH electrode (as most of the electrodes are non-calibrated). A 1000 ppm solution reference to calibrate the tds sensor as well
+- It is recommended to use an NPK sensor instead of a TDS sensor for accurate model prediction as the tds sensor currently acts as a proxy for NPK and may not be very reliable for precise predcition but can still do the overall job. The main reason for not using NPK sensor in this project is because of it's high cost.
 - Consider having distilled water and a standard solution with known ppm to calibrate the tds sensor (in-case it is not calibrated). Distilled water is also needed to clean the pH sensor between every soil sample test.
 - The soil solutions should be made with distilled water. 1:2 ratio of soil and water. The electrode will get damaged if it is dipped in a solution which contains lot of solid sand particles. Let the slurry/solution settle or filter out the solution.
 - A pH electrode stand will be helpful in handling the pH electrode. The bulb of the pH electrode should not touch the bottom of the container, as it will break the electrode. You can also use microphone stands with minor tweaks as you can see in the overview video.
