@@ -3,13 +3,11 @@
 ## Table of Contents
 
 - [Overview](#overview)
-- [Chemistry & EVS Focus](#chemistry--evs-focus)
 - [Features](#features)
 - [ML Algorithm & Training](#ml-algorithm--training)
 - [Project Structure](#project-structure)
 - [Setup](#setup)
-- [Browser Dashboard flags](#apppy-mode-flags)
-- [Script Flags](#script-flags-sim_scriptpy-ser_scriptpy)
+- [App and Script flags](#flags)
 - [Browser Dashboard](#-browser-dashboard)
 
 ## Overview
@@ -17,12 +15,6 @@
 <https://github.com/user-attachments/assets/58077799-b780-4939-9038-7cb840730b4b>
 
 pHorest is a cyber-physical system designed to combat soil acidification and nutrient runoff—major environmental concerns in modern chemistry. By integrating IoT sensors with a Random Forest Machine Learning model, the system identifies the soil's chemical state and provides precise neutralization strategies through recommendations of crops and fertilizers.
-
-## Chemistry & EVS Focus
-
-- **Acid-Base Equilibrium:** Monitoring soil pH to prevent aluminum toxicity.
-- **Ion Exchange Capacity:** Using TDS as a proxy for nutrient (NPK) concentration.
-- **Sustainability:** Reducing chemical waste by suggesting the "minimum necessary" fertilizer.
 
 ## Features
 
@@ -46,33 +38,8 @@ pHorest is a cyber-physical system designed to combat soil acidification and nut
 ### Training environment
 
 - Trained in **Google Colab (Jupyter Notebook)**.
+- Training code used: same as `training/train.py` in this repo
 - Dataset used: `Crop_recommendation.csv` (same schema as `dataset/Crop_recommendation.csv` in this repo).
-
-### Training code (used in Colab)
-
-```python
-import pandas as pd
-import joblib
-from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score
-
-df = pd.read_csv('Crop_recommendation.csv')
-
-X = df[['Nitrogen', 'phosphorus', 'potassium', 'temperature', 'humidity', 'ph', 'rainfall']]
-y = df['label']
-
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-model = RandomForestClassifier(n_estimators=100, random_state=42)
-model.fit(X_train, y_train)
-
-predictions = model.predict(X_test)
-print(f"Model Accuracy: {accuracy_score(y_test, predictions) * 100:.2f}%")
-
-joblib.dump(model, 'soil_model.pkl')
-print("Model saved as soil_model.pkl")
-```
 
 ### Using the trained model in this project
 
@@ -87,8 +54,10 @@ print("Model saved as soil_model.pkl")
 - `app.py`: Browser dashboard (live readings + crop + fertilizer recommendation).
 - `components.md`: Required hardware components and Arduino wiring map.
 - `arduino/`: Directory containing Arduino firmware files for data acquisition.
+
 - `soil_model.pkl`: Serialized Random Forest model.
-- `dataset/Crop_recommendation.csv`: Dataset used for training.
+- `dataset/`: Directory containing datasets.
+- `training/`: Directory containing training code.
 
 ## Setup
 
@@ -154,6 +123,8 @@ print("Model saved as soil_model.pkl")
       # Serial
       py app.py --serial COM3
       ```
+
+## Flags
 
 ### `app.py` mode flags
 
