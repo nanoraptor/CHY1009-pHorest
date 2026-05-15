@@ -38,7 +38,7 @@ pHorest is a cyber-physical system designed to combat soil acidification and nut
 ### Training environment
 
 - Trained in **Google Colab (Jupyter Notebook)**.
-- Training code used: same as `training/train.py` in this repo
+- Training code used: same as `training/train.ipynb` in this repo
 - Dataset used: `Crop_recommendation.csv` (same schema as `dataset/Crop_recommendation.csv` in this repo).
 
 ### Using the trained model in this project
@@ -60,6 +60,8 @@ pHorest is a cyber-physical system designed to combat soil acidification and nut
 - `training/`: Directory containing training code.
 
 ## Setup
+
+Before proceeding, make sure you have the physical setup ready. You can know more about it in the `components.md` file in the repo
 
 ### Linux / macOS
 
