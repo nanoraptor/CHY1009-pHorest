@@ -230,6 +230,7 @@ HTML = """
         <div class="tile"><div class="label">pH</div><div class="value" id="ph">-</div></div>
         <div class="tile"><div class="label">TDS (ppm)</div><div class="value" id="tds">-</div></div>
         <div class="tile"><div class="label">Temperature (°C)</div><div class="value" id="temperature">-</div></div>
+        <div class="tile"><div class="label">Humidity (%)</div><div class="value" id="humidity">-</div></div>
         <div class="tile"><div class="label">Recommended Crop</div><div class="value" id="crop">-</div></div>
         <div class="tile"><div class="label">Recommended Fertilizer</div><div class="value" id="fertilizer">-</div></div>
       </div>
@@ -267,6 +268,7 @@ HTML = """
       document.getElementById('ph').textContent = '-';
       document.getElementById('tds').textContent = '-';
       document.getElementById('temperature').textContent = '-';
+      document.getElementById('humidity').textContent = '-';
       document.getElementById('crop').textContent = '-';
       document.getElementById('fertilizer').textContent = '-';
       document.getElementById('raw').textContent = '-';
@@ -314,6 +316,7 @@ HTML = """
         document.getElementById('ph').textContent = data.ph.toFixed(2);
         document.getElementById('tds').textContent = Math.round(data.tds);
         document.getElementById('temperature').textContent = data.temperature.toFixed(1);
+        document.getElementById('humidity').textContent = data.humidity.toFixed(1);
         document.getElementById('crop').textContent = String(data.prediction).toUpperCase();
         document.getElementById('fertilizer').textContent = data.fertilizer;
         document.getElementById('raw').textContent = data.raw;
