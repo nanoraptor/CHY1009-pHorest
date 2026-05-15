@@ -6,7 +6,11 @@
 #define DHT_TYPE DHT11
 
 const uint16_t LOOP_DELAY_MS = 2000;
+
+// Replace this with your own TDS calibration factor derived from your reference solution and setup.
 const float TDS_CALIBRATION_FACTOR = 645.58;
+
+// Replace these with your own measured pH calibration voltages (pH 7 and pH 4) for your setup.
 const float PH_VOLTAGE_PH7 = 1.251;
 const float PH_VOLTAGE_PH4 = 1.769;
 const float PH_SLOPE = (PH_VOLTAGE_PH4 - PH_VOLTAGE_PH7) / 3.0;

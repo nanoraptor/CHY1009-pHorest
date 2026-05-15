@@ -1,6 +1,6 @@
 #define TDS_PIN A1
 
-// Calculated from your 1.549V reading at 1000ppm
+// Replace this with your own TDS calibration factor derived from your reference solution and setup.
 const float CALIBRATION_FACTOR = 645.58; 
 
 int readAverageRaw(uint8_t samples) {

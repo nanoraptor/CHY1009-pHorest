@@ -1,5 +1,6 @@
 #define PH_PIN A0
 
+// Replace these with your own measured pH calibration voltages (pH 7 and pH 4) for your setup.
 const float VOLTAGE_PH7 = 1.251;
 const float VOLTAGE_PH4 = 1.769;
 const float PH_SLOPE = (VOLTAGE_PH4 - VOLTAGE_PH7) / 3.0;
