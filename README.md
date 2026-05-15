@@ -37,7 +37,7 @@ pHorest is a cyber-physical system designed to combat soil acidification and nut
 
 ### Training environment
 
-- Trained in **Google Colab (Jupyter Notebook)**.
+- Trained in **Jupyter Notebook**.
 - Training code used: same as `random forest/training/train.ipynb` in this repo
 - Dataset used: `Crop_recommendation.csv` (same schema as `random forest/dataset/Crop_recommendation.csv` in this repo).
 
@@ -67,68 +67,65 @@ pHorest is a cyber-physical system designed to combat soil acidification and nut
 
 Before proceeding, make sure you have the physical setup ready. You can know more about it in the `docs/setup.md` file in the repo
 
-### Linux / macOS
-
-1. Connect Arduino (for live mode), commonly `/dev/ttyACM0` or `/dev/ttyUSB0`.
+1. Connect Arduino (for live mode), commonly `/dev/ttyACM0` or `/dev/ttyUSB0` for Linux/macOS, or `COM3` for Windows.
 2. Install dependencies:
 
+   **Linux / macOS:**
    ```bash
    python3 -m pip install pandas joblib pyserial scikit-learn flask
    ```
 
-3. Run:
-   - Terminal:
-
-      ```bash
-      # Simulation
-      python3 scripts/sim_script.py
-
-      # Serial
-      python3 scripts/ser_script.py --port=/dev/ttyACM0
-      ```
-
-    - Browser dashboard:
-
-       ```bash
-       # Simulation (default)
-       python3 app/app.py
-
-       # Serial (explicit port)
-       python3 app/app.py --serial /dev/ttyACM0
-
-       # Serial (auto-detect first available Arduino-like port)
-       python3 app/app.py --serial
-       ```
-
-### Windows
-
-1. Connect Arduino and note COM port (for example `COM3`).
-2. Install dependencies:
-
+   **Windows:**
    ```powershell
    py -m pip install pandas joblib pyserial scikit-learn flask
    ```
 
-3. Run:
-   - Terminal:
+### Run
 
-      ```powershell
-      # Simulation
-      py scripts/sim_script.py
+To run the scripts, use the appropriate command for your operating system:
 
-      # Serial
-      py scripts/ser_script.py --port=COM3
-      ```
+- Terminal:
 
-   - Browser dashboard:
+  **Linux / macOS:**
+  ```bash
+  # Simulation
+  python3 scripts/sim_script.py
 
-      ```powershell
-      # Simulation (default)
-      py app/app.py
+  # Serial
+  python3 scripts/ser_script.py --port=/dev/ttyACM0
+  ```
 
-      # Serial
-      py app/app.py --serial COM3
-      ```
+  **Windows:**
+  ```powershell
+  # Simulation
+  py scripts/sim_script.py
+
+  # Serial
+  py scripts/ser_script.py --port=COM3
+  ```
+
+- Browser dashboard:
+
+  **Linux / macOS:**
+  ```bash
+  # Simulation (default)
+  python3 app/app.py
+
+  # Serial (explicit port)
+  python3 app/app.py --serial /dev/ttyACM0
+
+  # Serial (auto-detect first available Arduino-like port)
+  python3 app/app.py --serial
+  ```
+
+  **Windows:**
+  ```powershell
+  # Simulation (default)
+  py app/app.py
+
+  # Serial
+  py app/app.py --serial COM3
+  ```
 
 ## Flags
 
