@@ -866,7 +866,7 @@ def _format_timestamp(epoch_seconds):
     return datetime.fromtimestamp(epoch_seconds).strftime("%Y-%m-%d %H:%M:%S")
 
 
-def fetch_weather_data(latitude: float, longitude: float):
+def fetch_rainfall_30d_open_meteo(latitude: float, longitude: float):
     end_date = date.today()
     start_date = end_date - timedelta(days=RAINFALL_WINDOW_DAYS - 1)
     params = {
