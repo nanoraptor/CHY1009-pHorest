@@ -126,7 +126,7 @@ pHorest is a cyber-physical system designed to combat soil acidification and nut
 
 ## Flags
 
-### `app.py` mode flags
+### App flags ('app.py')
 
 - `app.py` → starts in **SIM** mode
 - `app.py --sim` → explicitly starts in **SIM** mode
