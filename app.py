@@ -8,7 +8,6 @@ import time
 from threading import Lock
 
 import joblib
-import pandas as pd
 from flask import Flask, jsonify, render_template_string, request
 
 VALID_MODES = {"sim", "serial"}
@@ -17,6 +16,7 @@ PH_ADC_REF_VOLTAGE = 5.0
 PH_VOLTAGE_PH7 = 1.251
 PH_VOLTAGE_PH4 = 1.769
 PH_SLOPE = (PH_VOLTAGE_PH4 - PH_VOLTAGE_PH7) / 3.0
+DEFAULT_HUMIDITY = 60.0
 
 
 def parse_start_mode_args(argv):
@@ -54,16 +54,6 @@ CLI_MODE_OVERRIDE, CLI_PORT_OVERRIDE, CLI_LOCK_MODE, CLI_NO_CHECK = (
     if __name__ == "__main__"
     else (None, None, False, False)
 )
-
-COLS = [
-    "Nitrogen",
-    "phosphorus",
-    "potassium",
-    "temperature",
-    "humidity",
-    "ph",
-    "rainfall",
-]
 
 HTML = """
 <!doctype html>
@@ -240,7 +230,6 @@ HTML = """
         <div class="tile"><div class="label">pH</div><div class="value" id="ph">-</div></div>
         <div class="tile"><div class="label">TDS (ppm)</div><div class="value" id="tds">-</div></div>
         <div class="tile"><div class="label">Temperature (°C)</div><div class="value" id="temperature">-</div></div>
-        <div class="tile"><div class="label">Humidity (%)</div><div class="value" id="humidity">-</div></div>
         <div class="tile"><div class="label">Recommended Crop</div><div class="value" id="crop">-</div></div>
         <div class="tile"><div class="label">Recommended Fertilizer</div><div class="value" id="fertilizer">-</div></div>
       </div>
@@ -278,7 +267,6 @@ HTML = """
       document.getElementById('ph').textContent = '-';
       document.getElementById('tds').textContent = '-';
       document.getElementById('temperature').textContent = '-';
-      document.getElementById('humidity').textContent = '-';
       document.getElementById('crop').textContent = '-';
       document.getElementById('fertilizer').textContent = '-';
       document.getElementById('raw').textContent = '-';
@@ -326,7 +314,6 @@ HTML = """
         document.getElementById('ph').textContent = data.ph.toFixed(2);
         document.getElementById('tds').textContent = Math.round(data.tds);
         document.getElementById('temperature').textContent = data.temperature.toFixed(1);
-        document.getElementById('humidity').textContent = data.humidity.toFixed(1);
         document.getElementById('crop').textContent = String(data.prediction).toUpperCase();
         document.getElementById('fertilizer').textContent = data.fertilizer;
         document.getElementById('raw').textContent = data.raw;
@@ -417,16 +404,24 @@ def parse_serial_line(line: str):
     parts = line.strip().split(",")
     numeric = [float(x) for x in parts]
     if len(numeric) == 7:
+        if 14.0 < numeric[5] <= PH_ADC_MAX:
+            numeric[5] = ph_from_raw_adc(numeric[5])
         return numeric
     if len(numeric) == 4:
-        # Arduino packet format: phValueOrRaw,tdsPpm,temp,humidity
-        # Some sketches emit pH as raw ADC (0-1023), so convert using calibration constants.
+        # Arduino packet format: phValueOrRaw,tdsPpm,dhtTemp,humidity
         ph_raw, tds_ppm, temp, hum = numeric
         if 14.0 < ph_raw <= PH_ADC_MAX:
             ph_raw = ph_from_raw_adc(ph_raw)
         npk_proxy = tds_ppm / 3.0
         return [npk_proxy, npk_proxy, npk_proxy, temp, hum, ph_raw, 100.0]
-    raise ValueError("Expected 4 or 7 comma-separated values")
+    if len(numeric) == 3:
+        # Fallback packet format: phValueOrRaw,tdsPpm,dhtTemp
+        ph_raw, tds_ppm, temp = numeric
+        if 14.0 < ph_raw <= PH_ADC_MAX:
+            ph_raw = ph_from_raw_adc(ph_raw)
+        npk_proxy = tds_ppm / 3.0
+        return [npk_proxy, npk_proxy, npk_proxy, temp, DEFAULT_HUMIDITY, ph_raw, 100.0]
+    raise ValueError("Expected 3, 4, or 7 comma-separated values")
 
 
 def recommend_fertilizer(crop: str, n: float, p: float, k: float, ph_val: float):
@@ -692,12 +687,12 @@ def build_serial_sensor_status(reading: dict):
         },
         {
             "name": "DHT11 Temperature",
-            "connected": _is_non_nan(temp_val) and temp_val >= 0,
+            "connected": _is_non_nan(temp_val) and -40 <= temp_val <= 80,
             "value": f"{parts[2]} C",
         },
         {
             "name": "DHT11 Humidity",
-            "connected": _is_non_nan(hum_val) and hum_val >= 0,
+            "connected": _is_non_nan(hum_val) and 0 <= hum_val <= 100,
             "value": f"{parts[3]} %",
         },
     ]
@@ -748,13 +743,12 @@ def get_reading():
             temp = round(random.uniform(24.0, 35.0), 1)
             hum = round(random.uniform(45.0, 85.0), 1)
             values = [tds / 3, tds / 3, tds / 3, temp, hum, ph, 100.0]
-            raw_line = ",".join(f"{x:.2f}" for x in values)
+            raw_line = f"{ph:.2f},{tds:.0f},{temp:.1f},{hum:.1f}"
             active_port = None
 
     values = sanitize_input_values(values, skip_ph_check=not PH_RANGE_CHECK_ENABLED)
 
-    frame = pd.DataFrame([values], columns=COLS)
-    prediction = model.predict(frame)[0]
+    prediction = model.predict([values])[0]
     ph_val = values[5]
     n_val, p_val, k_val = values[0], values[1], values[2]
     status, action, level = evaluate_ph(ph_val)
