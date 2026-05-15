@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import joblib
 import pandas as pd
 import time
@@ -20,6 +21,7 @@ BOLD = "\033[1m"
 DEFAULT_RAINFALL_MM = 100.0
 RAINFALL_WINDOW_DAYS = 30
 WEATHER_HTTP_TIMEOUT_SECONDS = 8
+
 
 def fetch_rainfall_data(latitude: float, longitude: float):
     end_date = date.today()
@@ -64,6 +66,7 @@ def fetch_rainfall_data(latitude: float, longitude: float):
 
     return float(sum(rainfall_values))
 
+
 # Load model
 try:
     model = joblib.load("soil_model.pkl")
@@ -71,9 +74,19 @@ except FileNotFoundError:
     print(f"{RED}Error: soil_model.pkl not found!{RESET}")
     sys.exit(1)
 
-parser = argparse.ArgumentParser(description="Run the simulation script with optional rainfall data.")
-parser.add_argument("--location", nargs=2, type=float, metavar=("LAT", "LON"), help="Latitude and Longitude to fetch rainfall data.")
-parser.add_argument("--rainfall_data", type=float, help="Specify rainfall data directly.")
+parser = argparse.ArgumentParser(
+    description="Run the simulation script with optional rainfall data."
+)
+parser.add_argument(
+    "--location",
+    nargs=2,
+    type=float,
+    metavar=("LAT", "LON"),
+    help="Latitude and Longitude to fetch rainfall data.",
+)
+parser.add_argument(
+    "--rainfall_data", type=float, help="Specify rainfall data directly."
+)
 args = parser.parse_args()
 
 rainfall = DEFAULT_RAINFALL_MM
@@ -83,12 +96,18 @@ if args.location is not None:
     try:
         print(f"{YELLOW}Fetching rainfall data for location: {args.location}{RESET}")
         fetched_rainfall = fetch_rainfall_data(args.location[0], args.location[1])
-        print(f"{GREEN}Successfully fetched rainfall data: {fetched_rainfall:.2f}mm{RESET}")
+        print(
+            f"{GREEN}Successfully fetched rainfall data: {fetched_rainfall:.2f}mm{RESET}"
+        )
         rainfall = fetched_rainfall
     except Exception as e:
-        print(f"{RED}Warning: Failed to fetch rainfall data from location ({e}).{RESET}")
+        print(
+            f"{RED}Warning: Failed to fetch rainfall data from location ({e}).{RESET}"
+        )
         if args.rainfall_data is not None:
-            print(f"{YELLOW}Falling back to rainfall_data flag: {args.rainfall_data}mm{RESET}")
+            print(
+                f"{YELLOW}Falling back to rainfall_data flag: {args.rainfall_data}mm{RESET}"
+            )
             rainfall = args.rainfall_data
         else:
             use_default_warning = True
@@ -128,7 +147,9 @@ try:
 
         prediction = model.predict(data)[0]
 
-        print(f"Sensors -> pH: {ph} | TDS: {tds} ppm | Temp: {temp}°C | Humidity: {humidity}% | Rainfall: {rainfall:.2f}mm")
+        print(
+            f"Sensors -> pH: {ph} | TDS: {tds} ppm | Temp: {temp}°C | Humidity: {humidity}% | Rainfall: {rainfall:.2f}mm"
+        )
         print(f"AI Result -> {GREEN}{BOLD}{prediction.upper()}{RESET}")
 
         # Chemistry EVS Logic
@@ -143,3 +164,4 @@ try:
         time.sleep(2)
 except KeyboardInterrupt:
     print("\nStopped by user.")
+

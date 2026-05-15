@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import argparse
 import os
 import sys
@@ -9,6 +10,7 @@ from datetime import date, timedelta
 
 import joblib
 import pandas as pd
+
 try:
     import serial
     from serial import SerialException
@@ -36,6 +38,7 @@ COLS = [
     "rainfall",
 ]
 
+
 def ph_from_raw_adc(raw_adc: float):
     voltage = (raw_adc * PH_ADC_REF_VOLTAGE) / PH_ADC_MAX
     return 7.0 - ((voltage - PH_VOLTAGE_PH7) / PH_SLOPE)
@@ -62,8 +65,17 @@ def parse_serial_line(line: str, rainfall: float):
         if 14.0 < ph_raw <= PH_ADC_MAX:
             ph_raw = ph_from_raw_adc(ph_raw)
         npk_proxy = tds_ppm / 3.0
-        return [npk_proxy, npk_proxy, npk_proxy, temp, DEFAULT_HUMIDITY, ph_raw, rainfall]
+        return [
+            npk_proxy,
+            npk_proxy,
+            npk_proxy,
+            temp,
+            DEFAULT_HUMIDITY,
+            ph_raw,
+            rainfall,
+        ]
     raise ValueError("Expected 3, 4, or 7 comma-separated values")
+
 
 def fetch_rainfall_data(latitude: float, longitude: float):
     end_date = date.today()
@@ -108,20 +120,31 @@ def fetch_rainfall_data(latitude: float, longitude: float):
 
     return float(sum(rainfall_values))
 
+
 try:
     model = joblib.load("soil_model.pkl")
 except FileNotFoundError:
     print("Error: soil_model.pkl not found in project folder.")
     sys.exit(1)
 
-parser = argparse.ArgumentParser(description="Read Arduino serial data and run crop prediction.")
+parser = argparse.ArgumentParser(
+    description="Read Arduino serial data and run crop prediction."
+)
 parser.add_argument(
     "--port",
     default=os.getenv("ARDUINO_PORT", "/dev/ttyACM0"),
     help="Arduino serial port (example: /dev/ttyACM0 or COM3)",
 )
-parser.add_argument("--location", nargs=2, type=float, metavar=("LAT", "LON"), help="Latitude and Longitude to fetch rainfall data.")
-parser.add_argument("--rainfall_data", type=float, help="Specify rainfall data directly.")
+parser.add_argument(
+    "--location",
+    nargs=2,
+    type=float,
+    metavar=("LAT", "LON"),
+    help="Latitude and Longitude to fetch rainfall data.",
+)
+parser.add_argument(
+    "--rainfall_data", type=float, help="Specify rainfall data directly."
+)
 args = parser.parse_args()
 
 rainfall = DEFAULT_RAINFALL_MM
@@ -191,3 +214,4 @@ except KeyboardInterrupt:
     print("\nStopped by user.")
 finally:
     ser.close()
+
