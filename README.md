@@ -16,7 +16,7 @@
 
 <https://github.com/user-attachments/assets/58077799-b780-4939-9038-7cb840730b4b>
 
-pHorest is a cyber-physical system designed to combat soil acidification and nutrient runoff—major environmental concerns in modern chemistry. By integrating IoT sensors with a Random Forest Machine Learning model, the system identifies the soil's chemical state and provides precise neutralization strategies.
+pHorest is a cyber-physical system designed to combat soil acidification and nutrient runoff—major environmental concerns in modern chemistry. By integrating IoT sensors with a Random Forest Machine Learning model, the system identifies the soil's chemical state and provides precise neutralization strategies through recommendations of crops and fertilizers.
 
 ## Chemistry & EVS Focus
 
