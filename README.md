@@ -86,7 +86,7 @@ print("Model saved as soil_model.pkl")
 - `sim_script.py`: Simulation script for software-only demonstration.
 - `app.py`: Browser dashboard (live readings + crop + fertilizer recommendation).
 - `components.md`: Required hardware components and Arduino wiring map.
-- `arduino.cpp`: Arduino firmware for data acquisition.
+- `arduino/`: Directory containing Arduino firmware files for data acquisition.
 - `soil_model.pkl`: Serialized Random Forest model.
 - `dataset/Crop_recommendation.csv`: Dataset used for training.
 
