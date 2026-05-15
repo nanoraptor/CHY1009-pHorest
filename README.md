@@ -1,8 +1,18 @@
 # pHorest: AI-Driven Precision Soil Sustainability
 
-**A CHY1009/Environmental Science Project**
+<https://github.com/user-attachments/assets/58077799-b780-4939-9038-7cb840730b4b>
 
-https://github.com/user-attachments/assets/58077799-b780-4939-9038-7cb840730b4b
+## Table of Contents
+
+- [Overview](#overview)
+- [Chemistry & EVS Focus](#chemistry--evs-focus)
+- [Features](#features)
+- [ML Algorithm & Training](#ml-algorithm--training)
+- [Project Structure](#project-structure)
+- [Setup](#setup)
+- [Browser Dashboard flags](#apppy-mode-flags)
+- [Script Flags](#script-flags-sim_scriptpy-ser_scriptpy)
+- [Browser Dashboard](#-browser-dashboard)
 
 ## Overview
 
@@ -154,7 +164,45 @@ print("Model saved as soil_model.pkl")
 - `--lock-mode` → hides the mode selector and prevents switching modes during runtime
 - `--no-check` → skips strict pH input range validation (chemical status still shown)
 
+**Usage examples:**
+
+```bash
+# Start in simulation mode
+python3 app.py
+
+# Start in serial mode with a specific port
+python3 app.py --serial /dev/ttyACM0
+
+# Start in serial mode with auto-port detection and locked UI
+python3 app.py --serial --lock-mode
+```
+
 > the mode selector can be hidden by pressing 'm' in normal mode.
+
+### Script Flags (`sim_script.py`, `ser_script.py`)
+
+These scripts support optional flags to provide rainfall data:
+
+- `--location <LAT> <LON>`: Fetches 30-day rainfall data from an online weather API (Open-Meteo) based on the provided latitude and longitude.
+  - If the API call fails, the script will fall back to using the `--rainfall_data` value if provided, otherwise it will use a default value (100.0mm) and print a warning.
+- `--rainfall_data <VALUE>`: Directly specifies the 30-day rainfall value in millimeters.
+  - If both `--location` and `--rainfall_data` are provided, `--location` is attempted first. If it fails, `--rainfall_data` is used as a fallback.
+
+**Usage examples:**
+
+```bash
+# Simulation with location-based rainfall
+python3 sim_script.py --location 34.0522 -118.2437
+
+# Simulation with direct rainfall data
+python3 sim_script.py --rainfall_data 150.0
+
+# Serial with location-based rainfall
+python3 ser_script.py --port=/dev/ttyACM0 --location 34.0522 -118.2437
+
+# Serial with direct rainfall data
+python3 ser_script.py --port=/dev/ttyACM0 --rainfall_data 150.0
+```
 
 ## 🌐 Browser Dashboard
 
