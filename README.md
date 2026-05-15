@@ -60,12 +60,12 @@ pHorest is a cyber-physical system designed to combat soil acidification and nut
     - `soil_model.pkl`: Serialized Random Forest model.
   - `training/`: Contains the training notebook.
     - `train.ipynb`: Jupyter notebook for training the model.
-- `setup.md`: Required hardware components and Arduino wiring map.
+- `docs/setup.md`: Required hardware components and Arduino wiring map.
 - `arduino/`: Directory containing Arduino firmware files for data acquisition.
 
 ## Setup
 
-Before proceeding, make sure you have the physical setup ready. You can know more about it in the `setup.md` file in the repo
+Before proceeding, make sure you have the physical setup ready. You can know more about it in the `docs/setup.md` file in the repo
 
 ### Linux / macOS
 
