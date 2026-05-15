@@ -17,6 +17,7 @@ pHorest is a cyber-physical system designed to combat soil acidification and nut
 ## Features
 
 - **Hardware Sensing:** Real-time pH, TDS, and Temperature monitoring via Arduino.
+- **Cloud Rainfall Input:** 30-day rainfall is fetched online by location (Open-Meteo) for model input.
 - **AI Inference:** Random Forest Classifier trained on agricultural datasets.
 - **Smart Recommendations:** Crop prediction + fertilizer suggestion with pH-aware chemistry advice.
 
@@ -158,3 +159,7 @@ print("Model saved as soil_model.pkl")
 ## 🌐 Browser Dashboard
 
 Open `http://127.0.0.1:5000` after starting `app.py`.
+
+- Set your coordinates using **Use Browser Location** or manual latitude/longitude.
+- The app fetches **rolling 30-day rainfall (mm)** online and feeds it to the model.
+- If location/weather fetch is unavailable, the app falls back to cached or default rainfall and shows the source status in UI.

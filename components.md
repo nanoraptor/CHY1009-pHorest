@@ -39,6 +39,7 @@
 - `humidity` in serial output is from **DHT11**.
 - DS18B20 water temperature is used internally for pH/TDS compensation.
 - Serial output format from `arduino_full.ino`: `ph,tdsPpm,temp,humidity`.
+- `rainfall` is fetched online in the Web UI flow using location (browser geolocation or manual coordinates), not from a hardware rain sensor.
 
 ## Additional Stuff to buy and important notes
 

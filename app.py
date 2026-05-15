@@ -1,13 +1,19 @@
 #!/usr/bin/env python3
 import argparse
 import glob
+import json
 import os
 import random
 import sys
 import time
+from datetime import date, datetime, timedelta
 from threading import Lock
+from urllib.error import URLError
+from urllib.parse import urlencode
+from urllib.request import urlopen
 
 import joblib
+import pandas as pd
 from flask import Flask, jsonify, render_template_string, request
 
 VALID_MODES = {"sim", "serial"}
@@ -17,6 +23,10 @@ PH_VOLTAGE_PH7 = 1.251
 PH_VOLTAGE_PH4 = 1.769
 PH_SLOPE = (PH_VOLTAGE_PH4 - PH_VOLTAGE_PH7) / 3.0
 DEFAULT_HUMIDITY = 60.0
+DEFAULT_RAINFALL_MM = 100.0
+RAINFALL_WINDOW_DAYS = 30
+WEATHER_CACHE_TTL_SECONDS = 1800
+WEATHER_HTTP_TIMEOUT_SECONDS = 8
 
 
 def parse_start_mode_args(argv):
@@ -196,6 +206,39 @@ HTML = """
       overflow-x: auto;
     }
 
+    .controls-row {
+      margin-top: 10px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .text-input {
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: rgba(15, 23, 42, 0.9);
+      color: var(--text);
+      padding: 8px 10px;
+      font-size: 13px;
+      width: 140px;
+    }
+
+    .btn {
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: rgba(56, 189, 248, 0.18);
+      color: var(--text);
+      padding: 8px 12px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
     @media (max-width: 900px) {
       .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
@@ -231,6 +274,7 @@ HTML = """
         <div class="tile"><div class="label">TDS (ppm)</div><div class="value" id="tds">-</div></div>
         <div class="tile"><div class="label">Temperature (°C)</div><div class="value" id="temperature">-</div></div>
         <div class="tile"><div class="label">Humidity (%)</div><div class="value" id="humidity">-</div></div>
+        <div class="tile"><div class="label">Rainfall (30d mm)</div><div class="value" id="rainfall">-</div></div>
         <div class="tile"><div class="label">Recommended Crop</div><div class="value" id="crop">-</div></div>
         <div class="tile"><div class="label">Recommended Fertilizer</div><div class="value" id="fertilizer">-</div></div>
       </div>
@@ -249,11 +293,99 @@ HTML = """
       <div class="muted" style="margin-top:10px;">Last updated: <span id="updated">-</span></div>
     </div>
 
+    <div class="card">
+      <div class="label">Rainfall source</div>
+      <div id="rainfallSource" class="subtext">Using default rainfall (location not set).</div>
+      <div id="locationStatus" class="muted" style="margin-top:6px;">Coordinates: not set</div>
+      <div class="controls-row">
+        <button id="geoBtn" class="btn" type="button">Use Browser Location</button>
+        <input id="latInput" class="text-input" type="text" placeholder="Latitude" />
+        <input id="lonInput" class="text-input" type="text" placeholder="Longitude" />
+        <button id="setCoordsBtn" class="btn" type="button">Set Coordinates</button>
+      </div>
+    </div>
+
   </div>
 
   <script>
     const modeSelect = document.getElementById('modeSelect');
     const modeLocked = {{ 'true' if mode_locked else 'false' }};
+    const geoBtn = document.getElementById('geoBtn');
+    const setCoordsBtn = document.getElementById('setCoordsBtn');
+    const latInput = document.getElementById('latInput');
+    const lonInput = document.getElementById('lonInput');
+    const rainfallSourceEl = document.getElementById('rainfallSource');
+    const locationStatusEl = document.getElementById('locationStatus');
+
+    async function postLocation(latitude, longitude, source = 'manual') {
+      const res = await fetch('/api/location', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ latitude, longitude, source }),
+      });
+      return res.json();
+    }
+
+    async function loadLocation() {
+      try {
+        const res = await fetch('/api/location', { cache: 'no-store' });
+        const data = await res.json();
+        if (!data.ok || !data.location) return false;
+        const loc = data.location;
+        if (typeof loc.latitude === 'number' && typeof loc.longitude === 'number') {
+          latInput.value = loc.latitude.toFixed(6);
+          lonInput.value = loc.longitude.toFixed(6);
+          locationStatusEl.textContent = `Coordinates: ${loc.latitude.toFixed(6)}, ${loc.longitude.toFixed(6)}`;
+          return true;
+        }
+        return false;
+      } catch (_e) {
+        return false;
+      }
+    }
+
+    function requestBrowserLocation(autoRequest = false) {
+      return new Promise((resolve) => {
+        if (!navigator.geolocation) {
+          locationStatusEl.textContent = 'Geolocation is not supported in this browser.';
+          resolve(false);
+          return;
+        }
+        geoBtn.disabled = true;
+        locationStatusEl.textContent = autoRequest
+          ? 'Requesting browser location (auto)...'
+          : 'Requesting browser location...';
+        navigator.geolocation.getCurrentPosition(
+          async (pos) => {
+            try {
+              const lat = pos.coords.latitude;
+              const lon = pos.coords.longitude;
+              latInput.value = lat.toFixed(6);
+              lonInput.value = lon.toFixed(6);
+              const result = await postLocation(lat, lon, autoRequest ? 'browser-auto' : 'browser');
+              if (!result.ok) throw new Error(result.error || 'Failed to set location');
+              locationStatusEl.textContent = `Coordinates: ${result.location.latitude.toFixed(6)}, ${result.location.longitude.toFixed(6)}`;
+              resolve(true);
+            } catch (e) {
+              locationStatusEl.textContent = e.message;
+              resolve(false);
+            } finally {
+              geoBtn.disabled = false;
+            }
+          },
+          (err) => {
+            const insecureContextHint =
+              window.location.protocol !== 'https:' && window.location.hostname !== 'localhost'
+                ? ' (Use HTTPS or localhost for location access)'
+                : '';
+            locationStatusEl.textContent = `Unable to get location: ${err.message}${insecureContextHint}`;
+            geoBtn.disabled = false;
+            resolve(false);
+          },
+          { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 }
+        );
+      });
+    }
 
     async function setMode(mode) {
       const res = await fetch('/api/mode', {
@@ -269,6 +401,7 @@ HTML = """
       document.getElementById('tds').textContent = '-';
       document.getElementById('temperature').textContent = '-';
       document.getElementById('humidity').textContent = '-';
+      document.getElementById('rainfall').textContent = '-';
       document.getElementById('crop').textContent = '-';
       document.getElementById('fertilizer').textContent = '-';
       document.getElementById('raw').textContent = '-';
@@ -291,7 +424,7 @@ HTML = """
         text.includes('cannot open') ||
         text.includes('no such file or directory')
       ) {
-        return message ? `${prefix}\n${message}` : prefix;
+        return prefix;
       }
       return message || 'Unable to fetch serial reading';
     }
@@ -317,10 +450,18 @@ HTML = """
         document.getElementById('tds').textContent = Math.round(data.tds);
         document.getElementById('temperature').textContent = data.temperature.toFixed(1);
         document.getElementById('humidity').textContent = data.humidity.toFixed(1);
+        document.getElementById('rainfall').textContent = data.rainfall.toFixed(1);
         document.getElementById('crop').textContent = String(data.prediction).toUpperCase();
         document.getElementById('fertilizer').textContent = data.fertilizer;
         document.getElementById('raw').textContent = data.raw;
         document.getElementById('updated').textContent = data.timestamp;
+        const rainfallMeta = data.rainfall_meta || {};
+        const staleLabel = rainfallMeta.stale ? ' (stale)' : '';
+        const warningLabel = rainfallMeta.warning ? ` - ${rainfallMeta.warning}` : '';
+        rainfallSourceEl.textContent = `${rainfallMeta.source || 'default'}${staleLabel}${warningLabel}`;
+        if (rainfallMeta.latitude !== undefined && rainfallMeta.longitude !== undefined) {
+          locationStatusEl.textContent = `Coordinates: ${Number(rainfallMeta.latitude).toFixed(6)}, ${Number(rainfallMeta.longitude).toFixed(6)}`;
+        }
 
         const statusEl = document.getElementById('status');
         const actionEl = document.getElementById('action');
@@ -359,7 +500,38 @@ HTML = """
       });
     }
 
-    refresh();
+    setCoordsBtn.addEventListener('click', async () => {
+      const lat = Number(latInput.value.trim());
+      const lon = Number(lonInput.value.trim());
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+        locationStatusEl.textContent = 'Enter valid numeric latitude and longitude.';
+        return;
+      }
+      setCoordsBtn.disabled = true;
+      try {
+        const result = await postLocation(lat, lon, 'manual');
+        if (!result.ok) throw new Error(result.error || 'Failed to set location');
+        locationStatusEl.textContent = `Coordinates: ${result.location.latitude.toFixed(6)}, ${result.location.longitude.toFixed(6)}`;
+        refresh();
+      } catch (e) {
+        locationStatusEl.textContent = e.message;
+      } finally {
+        setCoordsBtn.disabled = false;
+      }
+    });
+
+    geoBtn.addEventListener('click', async () => {
+      await requestBrowserLocation(false);
+      refresh();
+    });
+
+    (async () => {
+      const hasLocation = await loadLocation();
+      if (!hasLocation) {
+        await requestBrowserLocation(true);
+      }
+      refresh();
+    })();
     setInterval(refresh, 2000);
 
     const modePill = document.querySelector('.mode-pill');
@@ -416,14 +588,14 @@ def parse_serial_line(line: str):
         if 14.0 < ph_raw <= PH_ADC_MAX:
             ph_raw = ph_from_raw_adc(ph_raw)
         npk_proxy = tds_ppm / 3.0
-        return [npk_proxy, npk_proxy, npk_proxy, temp, hum, ph_raw, 100.0]
+        return [npk_proxy, npk_proxy, npk_proxy, temp, hum, ph_raw, DEFAULT_RAINFALL_MM]
     if len(numeric) == 3:
         # Fallback packet format: phValueOrRaw,tdsPpm,dhtTemp
         ph_raw, tds_ppm, temp = numeric
         if 14.0 < ph_raw <= PH_ADC_MAX:
             ph_raw = ph_from_raw_adc(ph_raw)
         npk_proxy = tds_ppm / 3.0
-        return [npk_proxy, npk_proxy, npk_proxy, temp, DEFAULT_HUMIDITY, ph_raw, 100.0]
+        return [npk_proxy, npk_proxy, npk_proxy, temp, DEFAULT_HUMIDITY, ph_raw, DEFAULT_RAINFALL_MM]
     raise ValueError("Expected 3, 4, or 7 comma-separated values")
 
 
@@ -529,11 +701,16 @@ SERIAL_MODULE = None
 SERIAL_EXCEPTION = None
 SERIAL_PORT_LIST = None
 ACTIVE_PORT = PORT
+LOCATION = {"latitude": None, "longitude": None, "source": "unset", "updated_at": None}
+RAINFALL_CACHE = {}
+LAST_RAINFALL = None
 
 app = Flask(__name__)
 LATEST_READING = None
 LATEST_READING_LOCK = Lock()
 STATE_LOCK = Lock()
+LOCATION_LOCK = Lock()
+RAINFALL_LOCK = Lock()
 
 
 @app.get("/")
@@ -655,6 +832,183 @@ def switch_mode(new_mode: str):
     return mode
 
 
+def get_location_snapshot():
+    with LOCATION_LOCK:
+        return dict(LOCATION)
+
+
+def set_location(latitude, longitude, source="manual"):
+    lat = float(latitude)
+    lon = float(longitude)
+    if not (-90.0 <= lat <= 90.0):
+        raise ValueError("Latitude must be between -90 and 90")
+    if not (-180.0 <= lon <= 180.0):
+        raise ValueError("Longitude must be between -180 and 180")
+    timestamp = time.time()
+    location = {
+        "latitude": lat,
+        "longitude": lon,
+        "source": str(source or "manual"),
+        "updated_at": timestamp,
+    }
+    with LOCATION_LOCK:
+        LOCATION.update(location)
+    return dict(location)
+
+
+def _weather_cache_key(latitude: float, longitude: float):
+    return f"{latitude:.4f},{longitude:.4f}"
+
+
+def _format_timestamp(epoch_seconds):
+    if epoch_seconds is None:
+        return None
+    return datetime.fromtimestamp(epoch_seconds).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def fetch_weather_data(latitude: float, longitude: float):
+    end_date = date.today()
+    start_date = end_date - timedelta(days=RAINFALL_WINDOW_DAYS - 1)
+    params = {
+        "latitude": f"{latitude:.6f}",
+        "longitude": f"{longitude:.6f}",
+        "daily": "precipitation_sum",
+        "past_days": str(RAINFALL_WINDOW_DAYS),
+        "forecast_days": "0",
+        "timezone": "auto",
+    }
+    url = f"https://api.open-meteo.com/v1/forecast?{urlencode(params)}"
+
+    with urlopen(url, timeout=WEATHER_HTTP_TIMEOUT_SECONDS) as response:
+        payload = json.loads(response.read().decode("utf-8"))
+
+    daily = payload.get("daily", {})
+    time_values = daily.get("time")
+    precipitation = daily.get("precipitation_sum")
+    if (
+        not isinstance(time_values, list)
+        or not isinstance(precipitation, list)
+        or not precipitation
+        or len(time_values) != len(precipitation)
+    ):
+        raise RuntimeError("Weather API returned no precipitation data")
+
+    rainfall_values = []
+    for day_text, value in zip(time_values, precipitation):
+        if value is None:
+            continue
+        try:
+            day_value = date.fromisoformat(str(day_text))
+        except ValueError:
+            continue
+        if start_date <= day_value <= end_date:
+            rainfall_values.append(max(float(value), 0.0))
+
+    if not rainfall_values:
+        raise RuntimeError("Weather API precipitation values were empty")
+
+    rainfall_30d_mm = float(sum(rainfall_values))
+    return {
+        "rainfall_mm": rainfall_30d_mm,
+        "window_start": start_date.isoformat(),
+        "window_end": end_date.isoformat(),
+    }
+
+
+def resolve_rainfall():
+    global LAST_RAINFALL
+    location = get_location_snapshot()
+    latitude = location.get("latitude")
+    longitude = location.get("longitude")
+    now = time.time()
+
+    if latitude is None or longitude is None:
+        with RAINFALL_LOCK:
+            fallback = dict(LAST_RAINFALL) if LAST_RAINFALL is not None else None
+        if fallback is not None:
+            meta = {
+                "source": "last-known-cache",
+                "stale": True,
+                "latitude": fallback.get("latitude"),
+                "longitude": fallback.get("longitude"),
+                "fetched_at": _format_timestamp(fallback.get("fetched_at")),
+                "window_start": fallback.get("window_start"),
+                "window_end": fallback.get("window_end"),
+                "warning": "Location not set. Using last known rainfall value.",
+            }
+            return float(fallback["rainfall_mm"]), meta
+        meta = {
+            "source": "default-constant",
+            "stale": True,
+            "warning": "Location not set. Using default rainfall value.",
+        }
+        return DEFAULT_RAINFALL_MM, meta
+
+    cache_key = _weather_cache_key(latitude, longitude)
+    with RAINFALL_LOCK:
+        cached = RAINFALL_CACHE.get(cache_key)
+    if cached is not None and now - cached["fetched_at"] < WEATHER_CACHE_TTL_SECONDS:
+        meta = {
+            "source": "open-meteo-cache",
+            "stale": False,
+            "latitude": cached["latitude"],
+            "longitude": cached["longitude"],
+            "fetched_at": _format_timestamp(cached["fetched_at"]),
+            "window_start": cached["window_start"],
+            "window_end": cached["window_end"],
+        }
+        return float(cached["rainfall_mm"]), meta
+
+    try:
+        fetched = fetch_rainfall_30d_open_meteo(latitude, longitude)
+    except (RuntimeError, ValueError, URLError, OSError, TimeoutError, json.JSONDecodeError) as exc:
+        with RAINFALL_LOCK:
+            fallback = dict(LAST_RAINFALL) if LAST_RAINFALL is not None else None
+        if fallback is not None:
+            meta = {
+                "source": "last-known-cache",
+                "stale": True,
+                "latitude": fallback.get("latitude"),
+                "longitude": fallback.get("longitude"),
+                "fetched_at": _format_timestamp(fallback.get("fetched_at")),
+                "window_start": fallback.get("window_start"),
+                "window_end": fallback.get("window_end"),
+                "warning": f"Weather fetch failed ({exc}). Using last known rainfall value.",
+            }
+            return float(fallback["rainfall_mm"]), meta
+        meta = {
+            "source": "default-constant",
+            "stale": True,
+            "latitude": latitude,
+            "longitude": longitude,
+            "warning": f"Weather fetch failed ({exc}). Using default rainfall value.",
+        }
+        return DEFAULT_RAINFALL_MM, meta
+
+    cache_record = {
+        "rainfall_mm": fetched["rainfall_mm"],
+        "latitude": latitude,
+        "longitude": longitude,
+        "fetched_at": now,
+        "window_start": fetched["window_start"],
+        "window_end": fetched["window_end"],
+    }
+    with RAINFALL_LOCK:
+        RAINFALL_CACHE[cache_key] = dict(cache_record)
+        LAST_RAINFALL = dict(cache_record)
+
+    meta = {
+        "source": "open-meteo",
+        "stale": False,
+        "latitude": latitude,
+        "longitude": longitude,
+        "fetched_at": _format_timestamp(now),
+        "window_start": fetched["window_start"],
+        "window_end": fetched["window_end"],
+    }
+    return float(fetched["rainfall_mm"]), meta
+
+
 def _safe_float(text):
     try:
         return float(str(text).strip())
@@ -702,6 +1056,8 @@ def build_serial_sensor_status(reading: dict):
 
 
 def get_reading():
+    rainfall_mm, rainfall_meta = resolve_rainfall()
+
     with STATE_LOCK:
         mode = MODE
         if mode == "serial":
@@ -745,13 +1101,24 @@ def get_reading():
             tds = random.randint(300, 800)
             temp = round(random.uniform(24.0, 35.0), 1)
             hum = round(random.uniform(45.0, 85.0), 1)
-            values = [tds / 3, tds / 3, tds / 3, temp, hum, ph, 100.0]
+            values = [tds / 3, tds / 3, tds / 3, temp, hum, ph, DEFAULT_RAINFALL_MM]
             raw_line = f"{ph:.2f},{tds:.0f},{temp:.1f},{hum:.1f}"
             active_port = None
 
+    values[6] = rainfall_mm
     values = sanitize_input_values(values, skip_ph_check=not PH_RANGE_CHECK_ENABLED)
 
-    prediction = model.predict([values])[0]
+    feature_names = [
+        "Nitrogen",
+        "phosphorus",
+        "potassium",
+        "temperature",
+        "humidity",
+        "ph",
+        "rainfall",
+    ]
+    X = pd.DataFrame([values], columns=feature_names)
+    prediction = model.predict(X)[0]
     ph_val = values[5]
     n_val, p_val, k_val = values[0], values[1], values[2]
     status, action, level = evaluate_ph(ph_val)
@@ -766,6 +1133,8 @@ def get_reading():
         "tds": values[0] + values[1] + values[2],
         "temperature": values[3],
         "humidity": values[4],
+        "rainfall": values[6],
+        "rainfall_meta": rainfall_meta,
         "prediction": str(prediction),
         "fertilizer": fertilizer,
         "fertilizer_reason": fertilizer_reason,
@@ -811,6 +1180,28 @@ def api_latest():
         return jsonify(cached)
     except Exception as exc:
         return jsonify({"ok": False, "error": str(exc), "mode": get_mode()}), 200
+
+
+@app.route("/api/location", methods=["GET", "POST"])
+def api_location():
+    global LATEST_READING
+    if request.method == "GET":
+        return jsonify({"ok": True, "location": get_location_snapshot()})
+
+    payload = request.get_json(silent=True) or {}
+    latitude = payload.get("latitude")
+    longitude = payload.get("longitude")
+    source = payload.get("source", "manual")
+    if latitude is None or longitude is None:
+        return jsonify({"ok": False, "error": "latitude and longitude are required"}), 400
+
+    try:
+        location = set_location(latitude, longitude, source)
+        with LATEST_READING_LOCK:
+            LATEST_READING = None
+        return jsonify({"ok": True, "location": location}), 200
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
 
 
 @app.route("/api/mode", methods=["GET", "POST"])
