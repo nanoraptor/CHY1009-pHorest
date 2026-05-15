@@ -52,7 +52,7 @@ pHorest is a cyber-physical system designed to combat soil acidification and nut
 - `ser_script.py`: Local Python bridge between Arduino and ML model.
 - `sim_script.py`: Simulation script for software-only demonstration.
 - `app.py`: Browser dashboard (live readings + crop + fertilizer recommendation).
-- `components.md`: Required hardware components and Arduino wiring map.
+- `physical_setup.md`: Required hardware components and Arduino wiring map.
 - `arduino/`: Directory containing Arduino firmware files for data acquisition.
 
 - `soil_model.pkl`: Serialized Random Forest model.
@@ -61,7 +61,7 @@ pHorest is a cyber-physical system designed to combat soil acidification and nut
 
 ## Setup
 
-Before proceeding, make sure you have the physical setup ready. You can know more about it in the `components.md` file in the repo
+Before proceeding, make sure you have the physical setup ready. You can know more about it in the `physical_setup.md` file in the repo
 
 ### Linux / macOS
 
