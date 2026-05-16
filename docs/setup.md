@@ -49,3 +49,8 @@
 - The soil solutions should be made with distilled water. 1:2 ratio of soil and water. The electrode will get damaged if it is dipped in a solution which contains lot of solid sand particles. Let the slurry/solution settle or filter out the solution.
 - A pH electrode stand will be helpful in handling the pH electrode. The bulb of the pH electrode should not touch the bottom of the container, as it will break the electrode. You can also use microphone stands with minor tweaks as you can see in the overview video.
 - the DS18B20 probe is not needed if the tds and pH sensors have temperature compensation builtin. But those features are only reserved to high end probes which are not so cost effective.
+
+## Potential improvements
+
+- The webui (app.py) can be hosted on a server
+- Use of ESP32 instead of arduino to send data to the webui via internet rather than cable. (This requires code restructuring and rewrite of code as well)
