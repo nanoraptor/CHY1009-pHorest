@@ -1,0 +1,23 @@
+app/app.py
+  s_6102783c431e4e::t_fb66ad6d550d1b 10,683-719,721-723
+scripts/ser_script.py
+  s_6102783c431e4e::t_be453df43a1008 7,125-161,163-165
+scripts/sim_script.py
+  s_6102783c431e4e::t_b879d8ce59c62b 9,71-107,110-112
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.8",
+  "base_commit_sha": "8a406bce0fb684896b0213cd3788e7953fa751d6",
+  "prompts": {},
+  "sessions": {
+    "s_6102783c431e4e": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "74a7ccbb-a2f9-4baf-aa26-0ea2205cb39e",
+        "model": "gpt-5.3-codex"
+      },
+      "human_author": "nanoraptor <rahul.gyro@gmail.com>"
+    }
+  }
+}
