@@ -6,6 +6,7 @@ import random
 import os
 import sys
 import argparse
+from pathlib import Path
 from urllib.request import urlopen
 from urllib.parse import urlencode
 from datetime import date, timedelta
@@ -67,11 +68,48 @@ def fetch_rainfall_data(latitude: float, longitude: float):
     return float(sum(rainfall_values))
 
 
+def resolve_soil_model_path():
+    env_model_path = os.getenv("SOIL_MODEL_PATH")
+    checked_paths = []
+    if env_model_path:
+        configured_path = Path(env_model_path).expanduser()
+        if not configured_path.is_absolute():
+            configured_path = (Path.cwd() / configured_path).resolve()
+        checked_paths.append(configured_path)
+        if configured_path.is_file():
+            return configured_path
+        raise FileNotFoundError(
+            f"SOIL_MODEL_PATH points to a missing file: {configured_path}"
+        )
+
+    script_dir = Path(__file__).resolve().parent
+    roots = [Path.cwd(), script_dir, script_dir.parent]
+    relative_paths = (
+        Path("soil_model.pkl"),
+        Path("model") / "soil_model.pkl",
+        Path("random forest") / "model" / "soil_model.pkl",
+    )
+    seen = set()
+
+    for root in roots:
+        for relative_path in relative_paths:
+            candidate = (root / relative_path).resolve()
+            if candidate in seen:
+                continue
+            seen.add(candidate)
+            checked_paths.append(candidate)
+            if candidate.is_file():
+                return candidate
+
+    checked_display = ", ".join(str(path) for path in checked_paths)
+    raise FileNotFoundError(f"soil_model.pkl not found. Checked: {checked_display}")
+
+
 # Load model
 try:
-    model = joblib.load("soil_model.pkl")
-except FileNotFoundError:
-    print(f"{RED}Error: soil_model.pkl not found!{RESET}")
+    model = joblib.load(resolve_soil_model_path())
+except FileNotFoundError as exc:
+    print(f"{RED}Error: {exc}{RESET}")
     sys.exit(1)
 
 parser = argparse.ArgumentParser(
@@ -164,4 +202,3 @@ try:
         time.sleep(2)
 except KeyboardInterrupt:
     print("\nStopped by user.")
-

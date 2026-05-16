@@ -7,6 +7,7 @@ import random
 import sys
 import time
 from datetime import date, datetime, timedelta
+from pathlib import Path
 from threading import Lock
 from urllib.error import URLError
 from urllib.parse import urlencode
@@ -679,10 +680,47 @@ def sanitize_input_values(values: list, skip_ph_check: bool = False):
     return sanitized
 
 
+def resolve_soil_model_path():
+    env_model_path = os.getenv("SOIL_MODEL_PATH")
+    checked_paths = []
+    if env_model_path:
+        configured_path = Path(env_model_path).expanduser()
+        if not configured_path.is_absolute():
+            configured_path = (Path.cwd() / configured_path).resolve()
+        checked_paths.append(configured_path)
+        if configured_path.is_file():
+            return configured_path
+        raise FileNotFoundError(
+            f"SOIL_MODEL_PATH points to a missing file: {configured_path}"
+        )
+
+    script_dir = Path(__file__).resolve().parent
+    roots = [Path.cwd(), script_dir, script_dir.parent]
+    relative_paths = (
+        Path("soil_model.pkl"),
+        Path("model") / "soil_model.pkl",
+        Path("random forest") / "model" / "soil_model.pkl",
+    )
+    seen = set()
+
+    for root in roots:
+        for relative_path in relative_paths:
+            candidate = (root / relative_path).resolve()
+            if candidate in seen:
+                continue
+            seen.add(candidate)
+            checked_paths.append(candidate)
+            if candidate.is_file():
+                return candidate
+
+    checked_display = ", ".join(str(path) for path in checked_paths)
+    raise FileNotFoundError(f"soil_model.pkl not found. Checked: {checked_display}")
+
+
 try:
-    model = joblib.load("soil_model.pkl")
-except FileNotFoundError:
-    print("Error: soil_model.pkl not found in project folder.")
+    model = joblib.load(resolve_soil_model_path())
+except FileNotFoundError as exc:
+    print(f"Error: {exc}")
     sys.exit(1)
 
 MODE = os.getenv("SOURCE_MODE", "sim").lower()
