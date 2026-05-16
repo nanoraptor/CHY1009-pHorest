@@ -65,17 +65,19 @@ pHorest is a cyber-physical system designed to combat soil acidification and nut
 
 ## Setup
 
-Before proceeding, make sure you have the physical setup ready. You can know more about it in the `docs/setup.md` file in the repo
+Before proceeding, Set up hardware per `docs/setup.md` and flash `arduino/arduino_full/arduino_full.ino` via Arduino IDE.
 
-1. Connect Arduino (for live mode), commonly `/dev/ttyACM0` or `/dev/ttyUSB0` for Linux/macOS, or `COM3` for Windows.
+1. Connect Arduino (for live/serial mode), commonly `/dev/ttyACM0` or `/dev/ttyUSB0` for Linux/macOS, or `COM3` for Windows.
 2. Install dependencies:
 
    **Linux / macOS:**
+
    ```bash
    python3 -m pip install pandas joblib pyserial scikit-learn flask
    ```
 
    **Windows:**
+
    ```powershell
    py -m pip install pandas joblib pyserial scikit-learn flask
    ```
@@ -87,6 +89,7 @@ To run the scripts, use the appropriate command for your operating system:
 - Terminal:
 
   **Linux / macOS:**
+
   ```bash
   # Simulation
   python3 scripts/sim_script.py
@@ -96,6 +99,7 @@ To run the scripts, use the appropriate command for your operating system:
   ```
 
   **Windows:**
+
   ```powershell
   # Simulation
   py scripts/sim_script.py
@@ -107,6 +111,7 @@ To run the scripts, use the appropriate command for your operating system:
 - Browser dashboard:
 
   **Linux / macOS:**
+
   ```bash
   # Simulation (default)
   python3 app/app.py
@@ -119,6 +124,7 @@ To run the scripts, use the appropriate command for your operating system:
   ```
 
   **Windows:**
+
   ```powershell
   # Simulation (default)
   py app/app.py
@@ -185,3 +191,4 @@ Open `http://127.0.0.1:5000` after starting `app/app.py`.
 - Set your coordinates using **Use Browser Location** or manual latitude/longitude.
 - The app fetches **rolling 30-day rainfall (mm)** online and feeds it to the model.
 - If location/weather fetch is unavailable, the app falls back to cached or default rainfall and shows the source status in UI.
+
